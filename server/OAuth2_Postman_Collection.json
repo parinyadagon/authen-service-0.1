@@ -1,0 +1,273 @@
+{
+    "info": {
+        "name": "OAuth2 Authentication Service",
+        "description": "Complete OAuth2 Authorization Code Flow Testing",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8080"
+        },
+        {
+            "key": "access_token",
+            "value": ""
+        },
+        {
+            "key": "refresh_token",
+            "value": ""
+        },
+        {
+            "key": "auth_code",
+            "value": ""
+        }
+    ],
+    "item": [
+        {
+            "name": "1. Health Check",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/health",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "health"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "2. Register User",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"username\": \"newuser\",\n  \"password\": \"password123\",\n  \"email\": \"newuser@example.com\",\n  \"first_name\": \"New\",\n  \"last_name\": \"User\"\n}"
+                },
+                "url": {
+                    "raw": "{{base_url}}/api/auth/register",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "auth",
+                        "register"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "3. Login User",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"username\": \"testuser\",\n  \"password\": \"password123\"\n}"
+                },
+                "url": {
+                    "raw": "{{base_url}}/api/auth/login",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "auth",
+                        "login"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "4. OAuth2 Authorize (Get Code)",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "X-User-ID",
+                        "value": "550e8400-e29b-41d4-a716-446655440001",
+                        "description": "Test user ID for authorization"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/oauth/authorize?response_type=code&client_id=web-client&redirect_uri=http://localhost:3000/callback&scope=read:profile write:profile&state=xyz123",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "oauth",
+                        "authorize"
+                    ],
+                    "query": [
+                        {
+                            "key": "response_type",
+                            "value": "code"
+                        },
+                        {
+                            "key": "client_id",
+                            "value": "web-client"
+                        },
+                        {
+                            "key": "redirect_uri",
+                            "value": "http://localhost:3000/callback"
+                        },
+                        {
+                            "key": "scope",
+                            "value": "read:profile write:profile"
+                        },
+                        {
+                            "key": "state",
+                            "value": "xyz123"
+                        }
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "exec": [
+                            "if (pm.response.code === 200) {",
+                            "    const response = pm.response.json();",
+                            "    if (response.data && response.data.code) {",
+                            "        pm.collectionVariables.set('auth_code', response.data.code);",
+                            "        console.log('Authorization code saved:', response.data.code);",
+                            "    }",
+                            "}"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "5. OAuth2 Token Exchange",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"grant_type\": \"authorization_code\",\n  \"code\": \"{{auth_code}}\",\n  \"client_id\": \"web-client\",\n  \"client_secret\": \"your-client-secret-here\",\n  \"redirect_uri\": \"http://localhost:3000/callback\"\n}"
+                },
+                "url": {
+                    "raw": "{{base_url}}/oauth/token",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "oauth",
+                        "token"
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "exec": [
+                            "if (pm.response.code === 200) {",
+                            "    const response = pm.response.json();",
+                            "    if (response.access_token) {",
+                            "        pm.collectionVariables.set('access_token', response.access_token);",
+                            "        console.log('Access token saved');",
+                            "    }",
+                            "    if (response.refresh_token) {",
+                            "        pm.collectionVariables.set('refresh_token', response.refresh_token);",
+                            "        console.log('Refresh token saved');",
+                            "    }",
+                            "}"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "6. Refresh Access Token",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"refresh_token\": \"{{refresh_token}}\"\n}"
+                },
+                "url": {
+                    "raw": "{{base_url}}/api/auth/refresh",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "auth",
+                        "refresh"
+                    ]
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "exec": [
+                            "if (pm.response.code === 200) {",
+                            "    const response = pm.response.json();",
+                            "    if (response.data && response.data.access_token) {",
+                            "        pm.collectionVariables.set('access_token', response.data.access_token);",
+                            "        console.log('New access token saved');",
+                            "    }",
+                            "    if (response.data && response.data.refresh_token) {",
+                            "        pm.collectionVariables.set('refresh_token', response.data.refresh_token);",
+                            "        console.log('New refresh token saved');",
+                            "    }",
+                            "}"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "7. Test Protected Endpoint",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{access_token}}"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/protected",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "protected"
+                    ]
+                }
+            }
+        }
+    ]
+}

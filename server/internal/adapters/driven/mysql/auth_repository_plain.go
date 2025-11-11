@@ -651,6 +651,17 @@ func (r *authRepository) UpdateSessionAccess(ctx context.Context, sessionToken s
 	return nil
 }
 
+func (r *authRepository) ExtendSession(ctx context.Context, sessionToken string, newExpiry time.Time) error {
+	query := `UPDATE user_sessions SET expires_at = ?, last_accessed = ? WHERE session_token = ? AND is_active = 1`
+
+	_, err := r.db.ExecContext(ctx, query, newExpiry, time.Now(), sessionToken)
+	if err != nil {
+		return fmt.Errorf("failed to extend session: %w", err)
+	}
+
+	return nil
+}
+
 func generateTokenID() string {
 	return fmt.Sprintf("token_%d", time.Now().UnixNano())
 }

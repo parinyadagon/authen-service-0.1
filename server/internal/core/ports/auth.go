@@ -19,6 +19,8 @@ type AuthServicePort interface {
 	// Session management (for cookie-based auth)
 	InvalidateSession(ctx context.Context, sessionToken string) error
 	RefreshSession(ctx context.Context, refreshToken string) (*domain.AuthResp, error)
+	InvalidateAllUserSessions(ctx context.Context, userID string) error
+	DetectSessionCompromise(ctx context.Context, sessionToken, currentIP, currentUserAgent string) (bool, error)
 }
 
 type AuthRepositoryPort interface {
@@ -66,4 +68,5 @@ type AuthRepositoryPort interface {
 	FindActiveUserSessions(ctx context.Context, userID string) ([]*domain.UserSession, error)
 	CleanupExpiredSessions(ctx context.Context, userID string) error
 	UpdateSessionAccess(ctx context.Context, sessionToken string, lastAccessed time.Time) error
+	ExtendSession(ctx context.Context, sessionToken string, newExpiry time.Time) error
 }

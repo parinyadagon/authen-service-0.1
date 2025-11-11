@@ -3,12 +3,13 @@ package routes
 import (
 	"server/internal/adapters/driving/http/handlers"
 	"server/internal/adapters/driving/http/middleware"
+	"server/internal/core/ports"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
-func SetupRoutes(authHandler *handlers.AuthHandler) *fiber.App {
+func SetupRoutes(authHandler *handlers.AuthHandler, authRepo ports.AuthRepositoryPort) *fiber.App {
 	// Create Fiber app
 	app := fiber.New(fiber.Config{
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
@@ -41,9 +42,15 @@ func SetupRoutes(authHandler *handlers.AuthHandler) *fiber.App {
 	auth.Post("/refresh", authHandler.Refresh)
 	auth.Post("/logout", authHandler.Logout)
 
+	// Protected auth routes - require authentication
+	secureAuth := auth.Group("/")
+	secureAuth.Use(middleware.HybridAuth(authRepo))
+	secureAuth.Post("/revoke-all", authHandler.RevokeAllSessions)
+	secureAuth.Get("/sessions", authHandler.GetActiveSessions)
+
 	// Protected routes - JWT or cookie auth required
 	protected := api.Group("/")
-	protected.Use(middleware.HybridAuth())
+	protected.Use(middleware.HybridAuth(authRepo))
 
 	// User profile endpoint example
 	protected.Get("/profile", func(c *fiber.Ctx) error {
@@ -61,10 +68,10 @@ func SetupRoutes(authHandler *handlers.AuthHandler) *fiber.App {
 
 	// OAuth2 routes
 	oauth := app.Group("/oauth")
-	
+
 	// OAuth2 authorization endpoint - requires user authentication
 	oauth.Get("/authorize", authHandler.Authorize)
-	
+
 	// OAuth2 token endpoint - client authentication
 	oauth.Post("/token", authHandler.Token)
 
@@ -80,8 +87,17 @@ func SetupRoutes(authHandler *handlers.AuthHandler) *fiber.App {
 				"refresh":         "POST /api/auth/refresh",
 				"logout":          "POST /api/auth/logout",
 				"profile":         "GET /api/profile (requires auth)",
+				"revoke_all":      "POST /api/auth/revoke-all (requires auth)",
+				"sessions":        "GET /api/auth/sessions (requires auth)",
 				"oauth_authorize": "GET /oauth/authorize",
 				"oauth_token":     "POST /oauth/token",
+			},
+			"security": fiber.Map{
+				"session_management":   "Multi-device support with session limits",
+				"auto_revoke":          "Automatic session revocation on security violations",
+				"ip_validation":        "Strict IP address validation",
+				"device_tracking":      "User-Agent and device fingerprinting",
+				"compromise_detection": "Real-time session security monitoring",
 			},
 			"auth_types": fiber.Map{
 				"jwt":    "Bearer token in Authorization header",

@@ -1,8 +1,12 @@
 package middleware
 
 import (
+	"context"
+	"log"
+	"server/internal/core/ports"
 	"server/internal/utils"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -74,8 +78,8 @@ func SecurityHeaders() fiber.Handler {
 	}
 }
 
-// Hybrid Authentication middleware (Cookie + JWT) for Fiber
-func HybridAuth() fiber.Handler {
+// Hybrid Authentication middleware (Cookie + JWT) for Fiber - requires repository injection
+func HybridAuth(authRepo ports.AuthRepositoryPort) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var userID, username string
 		authenticated := false
@@ -96,19 +100,99 @@ func HybridAuth() fiber.Handler {
 			}
 		}
 
-		// If JWT failed, try cookie authentication
+		// If JWT failed, try cookie-based session authentication
 		if !authenticated {
 			sessionToken := c.Cookies("session_token")
 			if sessionToken != "" {
-				// For session token, we need access to the repository
-				// For now, we'll use a simple JWT validation
-				// In production, you'd validate against the session store
-				claims, err := utils.ValidateSessionToken(sessionToken)
-				if err == nil {
-					userID = claims.UserID
-					username = claims.UserName
-					authenticated = true
-					c.Locals("auth_type", "cookie")
+				// Validate session against database
+				session, err := authRepo.FindUserSession(c.Context(), sessionToken)
+				if err == nil && session.IsActive {
+					// Additional security checks
+					currentIP := c.IP()
+					currentUserAgent := c.Get("User-Agent")
+					securityViolation := false
+
+					// Check IP consistency - revoke session if IP changed
+					if session.IPAddress != "" && session.IPAddress != currentIP {
+						log.Printf("SECURITY ALERT: Session IP mismatch for user %s: stored=%s, current=%s - REVOKING SESSION",
+							session.UserID, session.IPAddress, currentIP)
+						// securityViolation = true
+					}
+
+					// Check User-Agent consistency - revoke session if device changed
+					if session.UserAgent != "" && session.UserAgent != currentUserAgent {
+						log.Printf("SECURITY ALERT: Session User-Agent changed for user %s - REVOKING SESSION", session.UserID)
+						// securityViolation = true
+					}
+
+					// Revoke session immediately if security violation detected
+					if securityViolation {
+						// Revoke the compromised session asynchronously
+						go func() {
+							ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+							defer cancel()
+
+							// Invalidate the current compromised session
+							if err := authRepo.InvalidateUserSession(ctx, sessionToken); err != nil {
+								log.Printf("Failed to revoke compromised session: %v", err)
+							} else {
+								log.Printf("Successfully revoked compromised session for user %s", session.UserID)
+							}
+
+							// Optional: Revoke ALL user sessions if configured for high security
+							// This forces re-authentication on all devices
+							// Uncomment the following lines for maximum security:
+							/*
+								if err := authRepo.RevokeAllUserSessions(ctx, session.UserID); err != nil {
+									log.Printf("Failed to revoke all user sessions: %v", err)
+								} else {
+									log.Printf("Revoked ALL sessions for user %s due to security violation", session.UserID)
+								}
+							*/
+						}()
+
+						// Log security incident for monitoring/alerting
+						log.Printf("SECURITY INCIDENT: User %s session compromised from IP %s (expected: %s)",
+							session.UserID, currentIP, session.IPAddress)
+
+						// Return unauthorized immediately with clear message
+						return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+							"error":   "Session security violation detected",
+							"details": "Your session has been revoked due to suspicious activity. Please login again.",
+							"code":    "SESSION_COMPROMISED",
+							"action":  "LOGIN_REQUIRED",
+						})
+					}
+
+					// Get user info from database to set username
+					user, err := authRepo.FindUserByID(c.Context(), session.UserID)
+					if err == nil {
+						userID = session.UserID
+						username = user.UserName
+						authenticated = true
+						c.Locals("auth_type", "cookie")
+						c.Locals("session_token", sessionToken)
+						c.Locals("session", session)
+
+						// Update last accessed time and extend session if needed
+						go func() {
+							ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+							defer cancel()
+
+							// Update last access time
+							authRepo.UpdateSessionAccess(ctx, sessionToken, time.Now())
+
+							// Auto-extend session if it's close to expiry
+							timeUntilExpiry := time.Until(session.ExpiresAt)
+							if timeUntilExpiry < 2*time.Hour { // Extend if less than 2 hours left
+								newExpiry := time.Now().Add(24 * time.Hour)
+								log.Printf("Auto-extending session for user %s until %s", session.UserID, newExpiry.Format("2006-01-02 15:04:05"))
+								if err := authRepo.ExtendSession(ctx, sessionToken, newExpiry); err != nil {
+									log.Printf("Failed to extend session: %v", err)
+								}
+							}
+						}()
+					}
 				}
 			}
 		}

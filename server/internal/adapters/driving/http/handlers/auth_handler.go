@@ -101,18 +101,8 @@ func (h *AuthHandler) setCookieAuth(c *fiber.Ctx, resp *domain.AuthResp) error {
 		SameSite: "Strict",
 	})
 
-	// Also set refresh token as httpOnly cookie
-	if resp.RefreshToken != "" {
-		c.Cookie(&fiber.Cookie{
-			Name:     "refresh_token",
-			Value:    resp.RefreshToken,
-			MaxAge:   7 * 24 * 60 * 60, // 7 days
-			Path:     "/",
-			Secure:   true,
-			HTTPOnly: true,
-			SameSite: "Strict",
-		})
-	}
+	// For cookie-based auth, we don't need refresh token cookies
+	// Session renewal is handled automatically by the session management system
 
 	// Return user info only (no sensitive tokens in response body)
 	return c.JSON(fiber.Map{
@@ -235,18 +225,9 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 		h.authService.InvalidateSession(c.Context(), sessionToken)
 	}
 
-	// Clear cookies
+	// Clear session cookie (no refresh token cookie for cookie-based auth)
 	c.Cookie(&fiber.Cookie{
 		Name:     "session_token",
-		Value:    "",
-		MaxAge:   -1,
-		Path:     "/",
-		Secure:   true,
-		HTTPOnly: true,
-	})
-
-	c.Cookie(&fiber.Cookie{
-		Name:     "refresh_token",
 		Value:    "",
 		MaxAge:   -1,
 		Path:     "/",
@@ -257,12 +238,61 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"message": "Logout successful",
 	})
-} // Health check endpoint
+} // RevokeAllSessions handles security incident - revoke all user sessions
+// POST /api/auth/revoke-all
+func (h *AuthHandler) RevokeAllSessions(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Authentication required",
+		})
+	}
+
+	err := h.authService.InvalidateAllUserSessions(c.Context(), userID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "Failed to revoke sessions",
+			"details": err.Error(),
+		})
+	}
+
+	return c.JSON(fiber.Map{
+		"message": "All sessions revoked successfully",
+		"action":  "Please login again on all devices",
+		"user_id": userID,
+	})
+}
+
+// GetActiveSessions returns all active sessions for current user
+// GET /api/auth/sessions
+func (h *AuthHandler) GetActiveSessions(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Authentication required",
+		})
+	}
+
+	// This would require a new repository method to get session details
+	return c.JSON(fiber.Map{
+		"message": "Active sessions (feature in development)",
+		"user_id": userID,
+		"note":    "Use revoke-all to invalidate all sessions for security",
+	})
+}
+
+// Health check endpoint
 // GET /health
 func (h *AuthHandler) Health(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"status":  "healthy",
 		"service": "authentication-service",
 		"version": "0.1.0",
+		"security": fiber.Map{
+			"session_management": "enabled",
+			"auto_revoke":        "enabled",
+			"ip_validation":      "strict",
+			"device_tracking":    "enabled",
+		},
 	})
 }

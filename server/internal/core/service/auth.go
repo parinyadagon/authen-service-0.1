@@ -49,35 +49,42 @@ func (s *authService) Login(ctx context.Context, authRep *domain.AuthReq) (*doma
 		return nil, errors.New("password incorrect")
 	}
 
-	accessToken, err := utils.GenerateAccessToken(found.ID, found.UserName)
-	if err != nil {
-		return nil, err
-	}
-
-	refreshToken, err := utils.GenerateRefreshToken(found.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Store refresh token in database for session management
-	refreshTokenEntity := &domain.RefreshToken{
-		UserID:    found.ID,
-		ClientID:  "web-client", // Default client for direct login
-		Scopes:    "read write", // Default scopes for direct login
-		IsRevoked: false,
-		ExpiresAt: time.Now().Add(7 * 24 * time.Hour), // 7 days
-	}
-
-	err = s.authRepo.StoreRefreshToken(ctx, refreshTokenEntity)
-	if err != nil {
-		return nil, fmt.Errorf("failed to store refresh token: %w", err)
-	}
-
 	// Determine auth type based on request
 	authType := "jwt" // default
 	if authRep.AuthType == "cookie" {
 		authType = "cookie"
 	}
+
+	var accessToken, refreshToken string
+
+	// Generate tokens based on auth type
+	if authType == "jwt" {
+		// JWT auth requires both access and refresh tokens
+		accessToken, err = utils.GenerateAccessToken(found.ID, found.UserName)
+		if err != nil {
+			return nil, err
+		}
+
+		refreshToken, err = utils.GenerateRefreshToken(found.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		// Store refresh token in database for JWT-based session management
+		refreshTokenEntity := &domain.RefreshToken{
+			UserID:    found.ID,
+			ClientID:  "web-client", // Default client for direct login
+			Scopes:    "read write", // Default scopes for direct login
+			IsRevoked: false,
+			ExpiresAt: time.Now().Add(7 * 24 * time.Hour), // 7 days
+		}
+
+		err = s.authRepo.StoreRefreshToken(ctx, refreshTokenEntity)
+		if err != nil {
+			return nil, fmt.Errorf("failed to store refresh token: %w", err)
+		}
+	}
+	// For cookie auth, we don't need refresh tokens - sessions handle renewal
 
 	response := &domain.AuthResp{
 		User: domain.UserResp{
@@ -113,15 +120,19 @@ func (s *authService) Login(ctx context.Context, authRep *domain.AuthReq) (*doma
 		// 2. Clean up expired sessions before creating new one
 		s.authRepo.CleanupExpiredSessions(ctx, found.ID)
 
-		// 3. Generate session token for cookie-based auth
+		// 3. Clean up unnecessary refresh tokens for cookie-based auth
+		// Since we're using session-based renewal, we don't need refresh tokens
+		s.authRepo.RevokeAllUserTokens(ctx, found.ID)
+
+		// 4. Generate session token for cookie-based auth
 		sessionToken, err := s.generateSecureCode()
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate session token: %w", err)
 		}
 		response.SessionToken = sessionToken
-		response.RefreshToken = refreshToken // Also include refresh token for cookie renewal
+		// No refresh token needed for cookie-based auth - sessions handle renewal automatically
 
-		// 4. Store session in database with enhanced security info
+		// 5. Store session in database with enhanced security info
 		userSession := &domain.UserSession{
 			SessionToken: sessionToken,
 			UserID:       found.ID,
@@ -500,8 +511,8 @@ func (s *authService) isValidRedirectURI(requestedURI, allowedURIs string) bool 
 	// In production, you might store multiple URIs as JSON array
 	// For now, simple string comparison
 	// Split the allowedURIs by comma or semicolon and check if requestedURI matches any of them
-	allowedList := strings.Split(allowedURIs, ",")
-	for _, uri := range allowedList {
+	allowedList := strings.SplitSeq(allowedURIs, ",")
+	for uri := range allowedList {
 		if strings.TrimSpace(uri) == requestedURI {
 			return true
 		}
@@ -542,6 +553,41 @@ func (s *authService) hashToken(token string) string {
 // Session management methods
 func (s *authService) InvalidateSession(ctx context.Context, sessionToken string) error {
 	return s.authRepo.InvalidateUserSession(ctx, sessionToken)
+}
+
+// InvalidateAllUserSessions revokes all sessions for a user (security breach response)
+func (s *authService) InvalidateAllUserSessions(ctx context.Context, userID string) error {
+	log.Printf("SECURITY ACTION: Invalidating all sessions for user %s", userID)
+	return s.authRepo.RevokeAllUserSessions(ctx, userID)
+}
+
+// DetectSessionCompromise checks for suspicious session activity
+func (s *authService) DetectSessionCompromise(ctx context.Context, sessionToken, currentIP, currentUserAgent string) (bool, error) {
+	session, err := s.authRepo.FindUserSession(ctx, sessionToken)
+	if err != nil {
+		return false, err
+	}
+
+	compromised := false
+	reasons := []string{}
+
+	// Check IP consistency
+	if session.IPAddress != "" && session.IPAddress != currentIP {
+		compromised = true
+		reasons = append(reasons, fmt.Sprintf("IP changed from %s to %s", session.IPAddress, currentIP))
+	}
+
+	// Check User-Agent consistency
+	if session.UserAgent != "" && session.UserAgent != currentUserAgent {
+		compromised = true
+		reasons = append(reasons, "User-Agent changed")
+	}
+
+	if compromised {
+		log.Printf("SESSION COMPROMISE DETECTED for user %s: %v", session.UserID, reasons)
+	}
+
+	return compromised, nil
 }
 
 func (s *authService) RefreshSession(ctx context.Context, refreshToken string) (*domain.AuthResp, error) {

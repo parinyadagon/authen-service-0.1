@@ -55,7 +55,7 @@ func main() {
 	authHandler := handlers.NewAuthHandler(authService)
 
 	// Setup routes with Fiber
-	app := routes.SetupRoutes(authHandler)
+	app := routes.SetupRoutes(authHandler, authRepo)
 
 	// Start server in a goroutine
 	go func() {

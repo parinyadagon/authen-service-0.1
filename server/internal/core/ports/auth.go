@@ -3,6 +3,7 @@ package ports
 import (
 	"context"
 	"server/internal/core/domain"
+	"time"
 )
 
 type AuthServicePort interface {
@@ -62,4 +63,7 @@ type AuthRepositoryPort interface {
 	FindUserSession(ctx context.Context, sessionToken string) (*domain.UserSession, error)
 	InvalidateUserSession(ctx context.Context, sessionToken string) error
 	RevokeAllUserSessions(ctx context.Context, userID string) error
+	FindActiveUserSessions(ctx context.Context, userID string) ([]*domain.UserSession, error)
+	CleanupExpiredSessions(ctx context.Context, userID string) error
+	UpdateSessionAccess(ctx context.Context, sessionToken string, lastAccessed time.Time) error
 }

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"server/internal/core/domain"
 	"server/internal/core/ports"
 
@@ -66,7 +67,12 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		}
 	}
 
-	resp, err := h.authService.Login(c.Context(), &req)
+	// Create security context for session management
+	securityCtx := context.WithValue(c.Context(), "ip_address", c.IP())
+	securityCtx = context.WithValue(securityCtx, "user_agent", c.Get("User-Agent"))
+	securityCtx = context.WithValue(securityCtx, "device_id", c.Get("X-Device-ID", "unknown"))
+
+	resp, err := h.authService.Login(securityCtx, &req)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error":   "Authentication failed",

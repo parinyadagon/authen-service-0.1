@@ -92,7 +92,28 @@ func (s *authService) Login(ctx context.Context, authRep *domain.AuthReq) (*doma
 	}
 
 	if authType == "cookie" {
-		// Generate session token for cookie-based auth
+		// 1. Check for existing active sessions and handle based on policy
+		existingSessions, err := s.authRepo.FindActiveUserSessions(ctx, found.ID)
+		if err == nil && len(existingSessions) > 0 {
+			// Session management policy: allow max 3 concurrent sessions
+			maxSessions := 3
+			if len(existingSessions) >= maxSessions {
+				// Remove oldest session to make room for new one
+				oldestSession := existingSessions[0]
+				for _, session := range existingSessions {
+					if session.CreatedAt.Before(oldestSession.CreatedAt) {
+						oldestSession = session
+					}
+				}
+				s.authRepo.InvalidateUserSession(ctx, oldestSession.SessionToken)
+				log.Printf("Invalidated oldest session for user %s due to session limit", found.ID)
+			}
+		}
+
+		// 2. Clean up expired sessions before creating new one
+		s.authRepo.CleanupExpiredSessions(ctx, found.ID)
+
+		// 3. Generate session token for cookie-based auth
 		sessionToken, err := s.generateSecureCode()
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate session token: %w", err)
@@ -100,7 +121,7 @@ func (s *authService) Login(ctx context.Context, authRep *domain.AuthReq) (*doma
 		response.SessionToken = sessionToken
 		response.RefreshToken = refreshToken // Also include refresh token for cookie renewal
 
-		// Store session in database for server-side session management
+		// 4. Store session in database with enhanced security info
 		userSession := &domain.UserSession{
 			SessionToken: sessionToken,
 			UserID:       found.ID,
@@ -108,12 +129,26 @@ func (s *authService) Login(ctx context.Context, authRep *domain.AuthReq) (*doma
 			ExpiresAt:    time.Now().Add(24 * time.Hour), // 24 hours
 			IsActive:     true,
 			CreatedAt:    time.Now(),
+			LastAccessed: time.Now(),
+		}
+
+		// Extract security information from context
+		if ipAddr, ok := ctx.Value("ip_address").(string); ok {
+			userSession.IPAddress = ipAddr
+		}
+		if userAgent, ok := ctx.Value("user_agent").(string); ok {
+			userSession.UserAgent = userAgent
+		}
+		if deviceID, ok := ctx.Value("device_id").(string); ok {
+			userSession.DeviceID = deviceID
 		}
 
 		err = s.authRepo.StoreUserSession(ctx, userSession)
 		if err != nil {
 			return nil, fmt.Errorf("failed to store user session: %w", err)
 		}
+
+		log.Printf("Created new session for user %s (total active sessions: %d)", found.ID, len(existingSessions)+1)
 
 	} else {
 		// JWT-based auth

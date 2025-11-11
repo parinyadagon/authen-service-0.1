@@ -17,7 +17,7 @@ type AuthResp struct {
 	AuthType     string   `json:"auth_type"` // Response type used
 }
 
-// User Session for cookie-based auth
+// UserSession represents a user session for cookie-based authentication with enhanced security
 type UserSession struct {
 	SessionToken string    `json:"session_token"`
 	UserID       string    `json:"user_id"`
@@ -25,6 +25,10 @@ type UserSession struct {
 	ExpiresAt    time.Time `json:"expires_at"`
 	IsActive     bool      `json:"is_active"`
 	CreatedAt    time.Time `json:"created_at"`
+	IPAddress    string    `json:"ip_address,omitempty"`    // Track IP for security
+	UserAgent    string    `json:"user_agent,omitempty"`    // Track device info
+	DeviceID     string    `json:"device_id,omitempty"`     // Device fingerprint
+	LastAccessed time.Time `json:"last_accessed,omitempty"` // Track activity
 }
 
 type Authorize struct {

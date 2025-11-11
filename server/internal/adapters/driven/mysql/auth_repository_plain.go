@@ -587,6 +587,70 @@ func (r *authRepository) RevokeAllUserSessions(ctx context.Context, userID strin
 	return nil
 }
 
+func (r *authRepository) FindActiveUserSessions(ctx context.Context, userID string) ([]*domain.UserSession, error) {
+	query := `
+		SELECT session_token, user_id, client_id, expires_at, is_active, created_at
+		FROM user_sessions 
+		WHERE user_id = ? AND is_active = 1 AND expires_at > NOW()
+		ORDER BY created_at DESC`
+
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find active user sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []*domain.UserSession
+	for rows.Next() {
+		var session domain.UserSession
+		err := rows.Scan(
+			&session.SessionToken,
+			&session.UserID,
+			&session.ClientID,
+			&session.ExpiresAt,
+			&session.IsActive,
+			&session.CreatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session: %w", err)
+		}
+		sessions = append(sessions, &session)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating sessions: %w", err)
+	}
+
+	return sessions, nil
+}
+
+func (r *authRepository) CleanupExpiredSessions(ctx context.Context, userID string) error {
+	query := `DELETE FROM user_sessions WHERE user_id = ? AND (expires_at < NOW() OR is_active = 0)`
+
+	result, err := r.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to cleanup expired sessions: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		fmt.Printf("Cleaned up %d expired sessions for user %s\n", rowsAffected, userID)
+	}
+
+	return nil
+}
+
+func (r *authRepository) UpdateSessionAccess(ctx context.Context, sessionToken string, lastAccessed time.Time) error {
+	query := `UPDATE user_sessions SET last_accessed = ? WHERE session_token = ? AND is_active = 1`
+
+	_, err := r.db.ExecContext(ctx, query, lastAccessed, sessionToken)
+	if err != nil {
+		return fmt.Errorf("failed to update session access time: %w", err)
+	}
+
+	return nil
+}
+
 func generateTokenID() string {
 	return fmt.Sprintf("token_%d", time.Now().UnixNano())
 }

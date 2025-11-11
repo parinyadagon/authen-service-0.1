@@ -4,81 +4,92 @@ import (
 	"server/internal/adapters/driving/http/handlers"
 	"server/internal/adapters/driving/http/middleware"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 )
 
-func SetupRoutes(authHandler *handlers.AuthHandler) *gin.Engine {
-	// Set Gin mode based on environment
-	gin.SetMode(gin.ReleaseMode) // Change to gin.DebugMode for development
-
-	router := gin.New()
+func SetupRoutes(authHandler *handlers.AuthHandler) *fiber.App {
+	// Create Fiber app
+	app := fiber.New(fiber.Config{
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			code := fiber.StatusInternalServerError
+			if e, ok := err.(*fiber.Error); ok {
+				code = e.Code
+			}
+			return c.Status(code).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		},
+	})
 
 	// Global middleware
-	router.Use(middleware.RequestLogger())
-	router.Use(middleware.CORS())
-	router.Use(middleware.SecurityHeaders())
-	router.Use(middleware.RateLimit())
-	router.Use(gin.Recovery())
+	app.Use(middleware.RequestLogger())
+	app.Use(middleware.CORS())
+	app.Use(middleware.SecurityHeaders())
+	app.Use(recover.New())
 
 	// Health check - no auth required
-	router.GET("/health", authHandler.Health)
+	app.Get("/health", authHandler.Health)
 
 	// API routes
-	api := router.Group("/api")
-	{
-		// Public auth routes - no JWT required
-		auth := api.Group("/auth")
-		{
-			auth.POST("/register", authHandler.Register)
-			auth.POST("/login", authHandler.Login)
-			auth.POST("/refresh", authHandler.Refresh)
-		}
+	api := app.Group("/api")
 
-		// Protected routes - JWT required
-		protected := api.Group("/")
-		protected.Use(middleware.JWTAuth())
-		{
-			// User profile endpoint example
-			protected.GET("/profile", func(c *gin.Context) {
-				userID := c.GetString("user_id")
-				username := c.GetString("username")
+	// Public auth routes - no JWT required
+	auth := api.Group("/auth")
+	auth.Post("/register", authHandler.Register)
+	auth.Post("/login", authHandler.Login)
+	auth.Post("/refresh", authHandler.Refresh)
+	auth.Post("/logout", authHandler.Logout)
 
-				c.JSON(200, gin.H{
-					"user_id":  userID,
-					"username": username,
-					"message":  "This is a protected endpoint",
-				})
-			})
-		}
-	}
+	// Protected routes - JWT or cookie auth required
+	protected := api.Group("/")
+	protected.Use(middleware.HybridAuth())
+
+	// User profile endpoint example
+	protected.Get("/profile", func(c *fiber.Ctx) error {
+		userID := c.Locals("user_id").(string)
+		username := c.Locals("username").(string)
+		authType := c.Locals("auth_type").(string)
+
+		return c.JSON(fiber.Map{
+			"user_id":   userID,
+			"username":  username,
+			"auth_type": authType,
+			"message":   "This is a protected endpoint",
+		})
+	})
 
 	// OAuth2 routes
-	oauth := router.Group("/oauth")
-	{
-		// OAuth2 authorization endpoint - requires user authentication
-		oauth.GET("/authorize", authHandler.Authorize)
-
-		// OAuth2 token endpoint - client authentication
-		oauth.POST("/token", authHandler.Token)
-	}
+	oauth := app.Group("/oauth")
+	
+	// OAuth2 authorization endpoint - requires user authentication
+	oauth.Get("/authorize", authHandler.Authorize)
+	
+	// OAuth2 token endpoint - client authentication
+	oauth.Post("/token", authHandler.Token)
 
 	// API documentation endpoint
-	router.GET("/", func(c *gin.Context) {
-		c.JSON(200, gin.H{
+	app.Get("/", func(c *fiber.Ctx) error {
+		return c.JSON(fiber.Map{
 			"service": "Authentication Service",
 			"version": "0.1.0",
-			"endpoints": gin.H{
+			"endpoints": fiber.Map{
 				"health":          "GET /health",
 				"register":        "POST /api/auth/register",
 				"login":           "POST /api/auth/login",
 				"refresh":         "POST /api/auth/refresh",
-				"profile":         "GET /api/profile (requires JWT)",
+				"logout":          "POST /api/auth/logout",
+				"profile":         "GET /api/profile (requires auth)",
 				"oauth_authorize": "GET /oauth/authorize",
 				"oauth_token":     "POST /oauth/token",
+			},
+			"auth_types": fiber.Map{
+				"jwt":    "Bearer token in Authorization header",
+				"cookie": "httpOnly session cookies",
 			},
 			"documentation": "https://github.com/your-repo/authen-service",
 		})
 	})
 
-	return router
+	return app
 }

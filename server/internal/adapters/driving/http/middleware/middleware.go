@@ -1,143 +1,87 @@
 package middleware
 
 import (
-	"fmt"
-	"net/http"
 	"strings"
-	"time"
-
 	"server/internal/utils"
 
-	"github.com/gin-gonic/gin"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
-// CORS middleware
-func CORS() gin.HandlerFunc {
-	return gin.HandlerFunc(func(c *gin.Context) {
-		origin := c.Request.Header.Get("Origin")
-
-		// Allow specific origins in production
-		allowedOrigins := []string{
-			"http://localhost:3000",
-			"http://localhost:3001",
-			"http://localhost:8080",
-		}
-
-		// Check if origin is allowed
-		allowed := false
-		for _, allowedOrigin := range allowedOrigins {
-			if origin == allowedOrigin {
-				allowed = true
-				break
-			}
-		}
-
-		if allowed {
-			c.Header("Access-Control-Allow-Origin", origin)
-		}
-
-		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, X-User-ID")
-		c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE, UPDATE")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-
-		c.Next()
+// CORS middleware for Fiber
+func CORS() fiber.Handler {
+	return cors.New(cors.Config{
+		AllowOrigins: "http://localhost:3000,http://localhost:3001,http://localhost:8080",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-User-ID",
+		AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+		AllowCredentials: true,
 	})
 }
 
-// RequestLogger middleware
-func RequestLogger() gin.HandlerFunc {
-	return gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
-		return fmt.Sprintf("%s - [%s] \"%s %s %s %d %s \"%s\" %s\"\n",
-			param.ClientIP,
-			param.TimeStamp.Format(time.RFC1123),
-			param.Method,
-			param.Path,
-			param.Request.Proto,
-			param.StatusCode,
-			param.Latency,
-			param.Request.UserAgent(),
-			param.ErrorMessage,
-		)
+// Request Logger middleware for Fiber
+func RequestLogger() fiber.Handler {
+	return logger.New(logger.Config{
+		Format: "${time} | ${status} | ${latency} | ${ip} | ${method} | ${path}\n",
 	})
 }
 
-// JWT Authentication middleware
-func JWTAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
+// JWT Authentication middleware for Fiber
+func JWTAuth() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		authHeader := c.Get("Authorization")
 		if authHeader == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Authorization header required",
 			})
-			c.Abort()
-			return
 		}
 
 		// Bearer token format
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			c.JSON(http.StatusUnauthorized, gin.H{
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Invalid authorization header format",
 			})
-			c.Abort()
-			return
 		}
 
 		token := parts[1]
 		claims, err := utils.ValidateAccessToken(token)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error":   "Invalid access token",
 				"details": err.Error(),
 			})
-			c.Abort()
-			return
 		}
 
 		// Set user info in context
-		c.Set("user_id", claims.UserID)
-		c.Set("username", claims.UserName)
-		c.Set("claims", claims)
+		c.Locals("user_id", claims.UserID)
+		c.Locals("username", claims.UserName)
+		c.Locals("claims", claims)
 
-		c.Next()
+		return c.Next()
 	}
 }
 
-// Rate limiting middleware (simple in-memory implementation)
-func RateLimit() gin.HandlerFunc {
-	// This is a simple implementation
-	// In production, use Redis or proper rate limiting library
-	return func(c *gin.Context) {
-		// Skip rate limiting for now
-		c.Next()
+// Security headers middleware for Fiber
+func SecurityHeaders() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		c.Set("X-Content-Type-Options", "nosniff")
+		c.Set("X-Frame-Options", "DENY")
+		c.Set("X-XSS-Protection", "1; mode=block")
+		c.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		c.Set("Content-Security-Policy", "default-src 'self'")
+		return c.Next()
 	}
 }
 
-// Security headers middleware
-func SecurityHeaders() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Header("X-Content-Type-Options", "nosniff")
-		c.Header("X-Frame-Options", "DENY")
-		c.Header("X-XSS-Protection", "1; mode=block")
-		c.Header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
-		c.Header("Content-Security-Policy", "default-src 'self'")
-		c.Next()
-	}
-}
-
-// Hybrid Authentication middleware (Cookie + JWT)
-func HybridAuth() gin.HandlerFunc {
-	return func(c *gin.Context) {
+// Hybrid Authentication middleware (Cookie + JWT) for Fiber
+func HybridAuth() fiber.Handler {
+	return func(c *fiber.Ctx) error {
 		var userID, username string
 		authenticated := false
 
 		// Try JWT authentication first
-		authHeader := c.GetHeader("Authorization")
+		authHeader := c.Get("Authorization")
 		if authHeader != "" {
 			parts := strings.SplitN(authHeader, " ", 2)
 			if len(parts) == 2 && parts[0] == "Bearer" {
@@ -147,39 +91,36 @@ func HybridAuth() gin.HandlerFunc {
 					userID = claims.UserID
 					username = claims.UserName
 					authenticated = true
-					c.Set("auth_type", "jwt")
+					c.Locals("auth_type", "jwt")
 				}
 			}
 		}
 
 		// If JWT failed, try cookie authentication
 		if !authenticated {
-			sessionToken, err := c.Cookie("session_token")
-			if err == nil && sessionToken != "" {
-				// Validate session token (you'd implement session validation)
-				// For now, we'll use a simple approach
+			sessionToken := c.Cookies("session_token")
+			if sessionToken != "" {
+				// Validate session token
 				claims, err := utils.ValidateSessionToken(sessionToken)
 				if err == nil {
 					userID = claims.UserID
 					username = claims.UserName
 					authenticated = true
-					c.Set("auth_type", "cookie")
+					c.Locals("auth_type", "cookie")
 				}
 			}
 		}
 
 		if !authenticated {
-			c.JSON(http.StatusUnauthorized, gin.H{
+			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 				"error": "Authentication required",
 				"hint":  "Provide either Bearer token or valid session cookie",
 			})
-			c.Abort()
-			return
 		}
 
 		// Set user context
-		c.Set("user_id", userID)
-		c.Set("username", username)
-		c.Next()
+		c.Locals("user_id", userID)
+		c.Locals("username", username)
+		return c.Next()
 	}
 }

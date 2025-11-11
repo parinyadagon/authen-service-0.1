@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -55,22 +54,13 @@ func main() {
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService)
 
-	// Setup routes
-	router := routes.SetupRoutes(authHandler)
-
-	// Create HTTP server
-	server := &http.Server{
-		Addr:           cfg.GetServerAddress(),
-		Handler:        router,
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
-		MaxHeaderBytes: 1 << 20, // 1MB
-	}
+	// Setup routes with Fiber
+	app := routes.SetupRoutes(authHandler)
 
 	// Start server in a goroutine
 	go func() {
 		log.Printf("Server starting on %s", cfg.GetServerAddress())
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := app.Listen(cfg.GetServerAddress()); err != nil {
 			log.Fatalf("Server failed to start: %v", err)
 		}
 	}()
@@ -99,7 +89,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := server.Shutdown(ctx); err != nil {
+	if err := app.ShutdownWithContext(ctx); err != nil {
 		log.Printf("Server forced to shutdown: %v", err)
 	}
 

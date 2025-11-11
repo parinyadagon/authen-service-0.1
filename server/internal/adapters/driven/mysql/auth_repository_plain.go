@@ -510,6 +510,83 @@ func nullString(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: true}
 }
 
+// User Session operations (for cookie-based auth)
+func (r *authRepository) StoreUserSession(ctx context.Context, session *domain.UserSession) error {
+	query := `
+		INSERT INTO user_sessions (session_token, user_id, client_id, expires_at, is_active, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)`
+
+	_, err := r.db.ExecContext(ctx, query,
+		session.SessionToken,
+		session.UserID,
+		session.ClientID,
+		session.ExpiresAt,
+		session.IsActive,
+		time.Now(),
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to store user session: %w", err)
+	}
+
+	return nil
+}
+
+func (r *authRepository) FindUserSession(ctx context.Context, sessionToken string) (*domain.UserSession, error) {
+	query := `
+		SELECT session_token, user_id, client_id, expires_at, is_active, created_at
+		FROM user_sessions 
+		WHERE session_token = ? AND is_active = 1`
+
+	var session domain.UserSession
+	err := r.db.QueryRowContext(ctx, query, sessionToken).Scan(
+		&session.SessionToken,
+		&session.UserID,
+		&session.ClientID,
+		&session.ExpiresAt,
+		&session.IsActive,
+		&session.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("session not found")
+		}
+		return nil, fmt.Errorf("failed to find user session: %w", err)
+	}
+
+	// Check if session is expired
+	if session.ExpiresAt.Before(time.Now()) {
+		// Auto-expire the session
+		r.InvalidateUserSession(ctx, sessionToken)
+		return nil, fmt.Errorf("session expired")
+	}
+
+	return &session, nil
+}
+
+func (r *authRepository) InvalidateUserSession(ctx context.Context, sessionToken string) error {
+	query := `UPDATE user_sessions SET is_active = 0 WHERE session_token = ?`
+
+	_, err := r.db.ExecContext(ctx, query, sessionToken)
+	if err != nil {
+		return fmt.Errorf("failed to invalidate user session: %w", err)
+	}
+
+	return nil
+}
+
+func (r *authRepository) RevokeAllUserSessions(ctx context.Context, userID string) error {
+	query := `UPDATE user_sessions SET is_active = 0 WHERE user_id = ?`
+
+	_, err := r.db.ExecContext(ctx, query, userID)
+	if err != nil {
+		return fmt.Errorf("failed to revoke all user sessions: %w", err)
+	}
+
+	return nil
+}
+
 func generateTokenID() string {
 	return fmt.Sprintf("token_%d", time.Now().UnixNano())
 }

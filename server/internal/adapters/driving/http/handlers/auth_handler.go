@@ -222,6 +222,13 @@ func (h *AuthHandler) Token(c *fiber.Ctx) error {
 // Logout handles user logout
 // POST /api/auth/logout
 func (h *AuthHandler) Logout(c *fiber.Ctx) error {
+	// Get session token from cookie
+	sessionToken := c.Cookies("session_token")
+	if sessionToken != "" {
+		// Invalidate session in database
+		h.authService.InvalidateSession(c.Context(), sessionToken)
+	}
+
 	// Clear cookies
 	c.Cookie(&fiber.Cookie{
 		Name:     "session_token",
@@ -244,9 +251,7 @@ func (h *AuthHandler) Logout(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{
 		"message": "Logout successful",
 	})
-}
-
-// Health check endpoint
+} // Health check endpoint
 // GET /health
 func (h *AuthHandler) Health(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{

@@ -14,6 +14,10 @@ type AuthServicePort interface {
 	// OAuth2 Authorization Code Flow
 	Authorize(ctx context.Context, req *domain.AuthorizeReq, userID string) (*domain.AuthorizeResp, error)
 	Token(ctx context.Context, req *domain.TokenReq) (*domain.TokenResp, error)
+
+	// Session management (for cookie-based auth)
+	InvalidateSession(ctx context.Context, sessionToken string) error
+	RefreshSession(ctx context.Context, refreshToken string) (*domain.AuthResp, error)
 }
 
 type AuthRepositoryPort interface {
@@ -52,4 +56,10 @@ type AuthRepositoryPort interface {
 	// User Consent operations
 	CreateUserConsent(ctx context.Context, consent *domain.UserConsent) error
 	FindUserConsent(ctx context.Context, userID, clientID string) (*domain.UserConsent, error)
+
+	// User Session operations (for cookie-based auth)
+	StoreUserSession(ctx context.Context, session *domain.UserSession) error
+	FindUserSession(ctx context.Context, sessionToken string) (*domain.UserSession, error)
+	InvalidateUserSession(ctx context.Context, sessionToken string) error
+	RevokeAllUserSessions(ctx context.Context, userID string) error
 }

@@ -100,7 +100,18 @@ CREATE TABLE user_consents (
     PRIMARY KEY (user_id, client_id),
     CONSTRAINT fk_userconsents_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT fk_userconsents_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- 11. user_sessions (for cookie-based authentication)
+CREATE TABLE user_sessions (
+    session_token VARCHAR(128) NOT NULL PRIMARY KEY,
+    user_id CHAR(36) NOT NULL,
+    client_id VARCHAR(100) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
 ```

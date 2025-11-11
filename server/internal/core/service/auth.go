@@ -98,9 +98,23 @@ func (s *authService) Login(ctx context.Context, authRep *domain.AuthReq) (*doma
 			return nil, fmt.Errorf("failed to generate session token: %w", err)
 		}
 		response.SessionToken = sessionToken
+		response.RefreshToken = refreshToken // Also include refresh token for cookie renewal
 
-		// Store session for cookie auth (optional - for server-side session management)
-		// You can implement session storage if needed
+		// Store session in database for server-side session management
+		userSession := &domain.UserSession{
+			SessionToken: sessionToken,
+			UserID:       found.ID,
+			ClientID:     "web-client",                   // Default client for direct login
+			ExpiresAt:    time.Now().Add(24 * time.Hour), // 24 hours
+			IsActive:     true,
+			CreatedAt:    time.Now(),
+		}
+
+		err = s.authRepo.StoreUserSession(ctx, userSession)
+		if err != nil {
+			return nil, fmt.Errorf("failed to store user session: %w", err)
+		}
+
 	} else {
 		// JWT-based auth
 		response.AccessToken = accessToken
@@ -488,4 +502,94 @@ func (s *authService) hashToken(token string) string {
 	bytes := make([]byte, 16)
 	rand.Read(bytes)
 	return hex.EncodeToString(bytes)
+}
+
+// Session management methods
+func (s *authService) InvalidateSession(ctx context.Context, sessionToken string) error {
+	return s.authRepo.InvalidateUserSession(ctx, sessionToken)
+}
+
+func (s *authService) RefreshSession(ctx context.Context, refreshToken string) (*domain.AuthResp, error) {
+	// 1. Validate refresh token
+	userID, err := utils.ValidateRefreshToken(refreshToken)
+	if err != nil {
+		return nil, errors.New("invalid refresh token")
+	}
+
+	// 2. Find refresh token in database
+	tokenHash := s.hashToken(refreshToken)
+	tokenEntity, err := s.authRepo.FindRefreshToken(ctx, tokenHash)
+	if err != nil || tokenEntity.IsRevoked {
+		return nil, errors.New("invalid or revoked refresh token")
+	}
+
+	if tokenEntity.ExpiresAt.Before(time.Now()) {
+		return nil, errors.New("refresh token expired")
+	}
+
+	// 3. Get user info
+	user, err := s.authRepo.FindUserByID(ctx, userID)
+	if err != nil || !user.IsActive {
+		return nil, errors.New("user not found or inactive")
+	}
+
+	// 4. Generate new session token
+	newSessionToken, err := s.generateSecureCode()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate session token: %w", err)
+	}
+
+	// 5. Generate new refresh token
+	newRefreshToken, err := utils.GenerateRefreshToken(userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	// 6. Revoke old refresh token and create new one
+	err = s.authRepo.RevokeRefreshToken(ctx, tokenHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to revoke old token: %w", err)
+	}
+
+	newTokenEntity := &domain.RefreshToken{
+		UserID:    userID,
+		ClientID:  tokenEntity.ClientID,
+		Scopes:    tokenEntity.Scopes,
+		IsRevoked: false,
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour), // 7 days
+	}
+
+	err = s.authRepo.StoreRefreshToken(ctx, newTokenEntity)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store new refresh token: %w", err)
+	}
+
+	// 7. Store new session
+	userSession := &domain.UserSession{
+		SessionToken: newSessionToken,
+		UserID:       userID,
+		ClientID:     tokenEntity.ClientID,
+		ExpiresAt:    time.Now().Add(24 * time.Hour), // 24 hours
+		IsActive:     true,
+		CreatedAt:    time.Now(),
+	}
+
+	err = s.authRepo.StoreUserSession(ctx, userSession)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store new session: %w", err)
+	}
+
+	return &domain.AuthResp{
+		SessionToken: newSessionToken,
+		RefreshToken: newRefreshToken,
+		AuthType:     "cookie",
+		User: domain.UserResp{
+			UserID:    user.ID,
+			UserName:  user.UserName,
+			FirstName: user.FirstName,
+			LastName:  user.LastName,
+			Email:     user.Email,
+			IsActive:  user.IsActive,
+		},
+	}, nil
 }

@@ -28,11 +28,23 @@ ALTER TABLE access_tokens CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_gener
 ALTER TABLE refresh_tokens CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 ALTER TABLE user_consents CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 
+-- 7. Add user_sessions table for cookie-based authentication
+CREATE TABLE IF NOT EXISTS user_sessions (
+    session_token VARCHAR(128) NOT NULL PRIMARY KEY,
+    user_id CHAR(36) NOT NULL,
+    client_id VARCHAR(100) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_sessions_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 -- Verify the changes
 DESCRIBE roles;
 DESCRIBE permissions;
 DESCRIBE authorization_codes;  
 DESCRIBE access_tokens;
 DESCRIBE refresh_tokens;
+DESCRIBE user_sessions;
 
 SELECT 'Migration completed successfully!' as status;

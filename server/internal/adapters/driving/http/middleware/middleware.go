@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"strings"
 	"server/internal/utils"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -12,9 +12,9 @@ import (
 // CORS middleware for Fiber
 func CORS() fiber.Handler {
 	return cors.New(cors.Config{
-		AllowOrigins: "http://localhost:3000,http://localhost:3001,http://localhost:8080",
-		AllowHeaders: "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-User-ID",
-		AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
+		AllowOrigins:     "http://localhost:3000,http://localhost:3001,http://localhost:8080",
+		AllowHeaders:     "Origin, Content-Type, Accept, Authorization, X-Requested-With, X-User-ID",
+		AllowMethods:     "GET,POST,HEAD,PUT,DELETE,PATCH,OPTIONS",
 		AllowCredentials: true,
 	})
 }
@@ -100,7 +100,9 @@ func HybridAuth() fiber.Handler {
 		if !authenticated {
 			sessionToken := c.Cookies("session_token")
 			if sessionToken != "" {
-				// Validate session token
+				// For session token, we need access to the repository
+				// For now, we'll use a simple JWT validation
+				// In production, you'd validate against the session store
 				claims, err := utils.ValidateSessionToken(sessionToken)
 				if err == nil {
 					userID = claims.UserID

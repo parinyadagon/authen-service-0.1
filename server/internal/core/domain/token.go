@@ -3,6 +3,7 @@ package domain
 import "time"
 
 type RefreshToken struct {
+	TokenHash string    `json:"token_hash"`
 	UserID    string    `json:"user_id"`
 	ClientID  string    `json:"client_id"`
 	Scopes    string    `json:"scopes"`

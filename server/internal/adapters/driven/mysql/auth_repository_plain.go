@@ -392,10 +392,14 @@ func (r *authRepository) StoreRefreshToken(ctx context.Context, token *domain.Re
 		INSERT INTO refresh_tokens (token_hash, user_id, client_id, scopes, is_revoked, expires_at)
 		VALUES (?, ?, ?, ?, ?, ?)`
 
-	tokenID := generateTokenID() // Generate a unique ID for the refresh token
+	// Use the token hash that should be provided in the token struct
+	tokenHash := token.TokenHash
+	if tokenHash == "" {
+		tokenHash = generateTokenID() // Fallback to old behavior if no hash provided
+	}
 
 	_, err := r.db.ExecContext(ctx, query,
-		tokenID,
+		tokenHash,
 		token.UserID,
 		token.ClientID,
 		token.Scopes,

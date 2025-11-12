@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -72,6 +73,7 @@ func (s *authService) Login(ctx context.Context, authRep *domain.AuthReq) (*doma
 
 		// Store refresh token in database for JWT-based session management
 		refreshTokenEntity := &domain.RefreshToken{
+			TokenHash: s.hashToken(refreshToken), // Hash the refresh token
 			UserID:    found.ID,
 			ClientID:  "web-client", // Default client for direct login
 			Scopes:    "read write", // Default scopes for direct login
@@ -220,6 +222,7 @@ func (s *authService) Refresh(ctx context.Context, refreshToken string) (*domain
 	}
 
 	newTokenEntity := &domain.RefreshToken{
+		TokenHash: s.hashToken(newRefreshToken), // Hash the new refresh token
 		UserID:    userID,
 		ClientID:  tokenEntity.ClientID,
 		Scopes:    tokenEntity.Scopes,
@@ -465,6 +468,7 @@ func (s *authService) Token(ctx context.Context, req *domain.TokenReq) (*domain.
 	}
 
 	refreshTokenEntity := &domain.RefreshToken{
+		TokenHash: s.hashToken(refreshToken), // Hash the refresh token
 		UserID:    user.ID,
 		ClientID:  req.ClientID,
 		Scopes:    authCode.Scopes,
@@ -544,10 +548,9 @@ func (s *authService) validatePKCE(challenge, method, verifier string) bool {
 }
 
 func (s *authService) hashToken(token string) string {
-	// Simple hash for token ID - in production use proper hashing
-	bytes := make([]byte, 16)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
+	// Proper token hashing using SHA256
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
 }
 
 // Session management methods
@@ -633,6 +636,7 @@ func (s *authService) RefreshSession(ctx context.Context, refreshToken string) (
 	}
 
 	newTokenEntity := &domain.RefreshToken{
+		TokenHash: s.hashToken(newRefreshToken), // Hash the new refresh token
 		UserID:    userID,
 		ClientID:  tokenEntity.ClientID,
 		Scopes:    tokenEntity.Scopes,

@@ -1,4 +1,19 @@
-# Authentication Service API
+````markdown
+# 🔐 Authentication Service API
+
+**Version:** 0.1.0  
+**Base URL:** `http://localhost:8080`  
+**Framework:** Go Fiber v2.52.9 (High Performance)
+
+## 🚀 Features
+
+- **🔄 Hybrid Authentication**: JWT tokens + httpOnly cookies
+- **🛡️ Advanced Security**: IP validation, device tracking, auto-revoke
+- **⚡ Session Management**: Multi-device support with concurrent limits (max 3 sessions)
+- **🔐 OAuth2 Flow**: Complete Authorization Code Flow
+- **📱 Multi-platform**: Web, mobile, API clients support
+- **🔒 Enterprise Security**: Real-time compromise detection & auto-session extension
+- **🎯 Smart Token Management**: Optimized refresh token creation based on auth type
 
 ## Quick Start
 
@@ -39,9 +54,26 @@ For detailed OAuth2 usage instructions, see **[OAUTH2_USAGE.md](./OAUTH2_USAGE.m
 3. **Use Token**: Include `Authorization: Bearer <token>` in requests
 4. **Refresh**: `POST /api/auth/refresh` → Get new tokens when expired
 
-## API Endpoints
+## 🔐 Authentication Types
 
-### Public Endpoints
+### 1. JWT Token Authentication
+- **Use Case**: Mobile apps, API clients
+- **Headers**: `Authorization: Bearer <token>`
+- **Features**: Stateless, portable, includes refresh tokens
+
+### 2. Cookie-Based Authentication  
+- **Use Case**: Web browsers, same-origin requests
+- **Headers**: Automatic cookie handling
+- **Features**: httpOnly cookies, CSRF protection, no refresh tokens needed
+
+### 3. Hybrid Detection
+The system automatically detects client type and provides appropriate authentication method:
+- **API Clients**: Receives JWT tokens in response body
+- **Web Browsers**: Receives httpOnly cookies + simplified JSON response
+
+## 📡 API Endpoints
+
+### 🟢 Public Endpoints
 
 #### Health Check
 ```
@@ -87,20 +119,21 @@ POST /api/auth/register
 ```
 
 #### User Login
-```
+```http
 POST /api/auth/login
+Content-Type: application/json
 ```
 
 **Request:**
 ```json
 {
-  "user_name": "testuser",
+  "user_name": "testuser", 
   "password": "password123",
   "remember_me": false
 }
 ```
 
-**Response:**
+**JWT Response (API Clients):**
 ```json
 {
   "message": "Login successful",
@@ -110,7 +143,7 @@ POST /api/auth/login
     "user": {
       "user_id": "550e8400-e29b-41d4-a716-446655440001",
       "user_name": "testuser",
-      "first_name": "Test",
+      "first_name": "Test", 
       "last_name": "User",
       "email": "test@example.com",
       "is_active": true
@@ -119,9 +152,28 @@ POST /api/auth/login
 }
 ```
 
-#### Token Refresh
+**Cookie Response (Web Browsers):**
+```json
+{
+  "message": "Login successful",
+  "data": {
+    "user": {
+      "user_id": "550e8400-e29b-41d4-a716-446655440001",
+      "user_name": "testuser",
+      "first_name": "Test",
+      "last_name": "User", 
+      "email": "test@example.com",
+      "is_active": true
+    }
+  }
+}
 ```
+*Note: httpOnly cookies are automatically set for web browsers*
+
+#### Token Refresh (JWT Only)
+```http
 POST /api/auth/refresh
+Content-Type: application/json
 ```
 
 **Request:**
@@ -141,25 +193,106 @@ POST /api/auth/refresh
   }
 }
 ```
+*Note: Cookie-based auth doesn't need refresh - sessions auto-extend when active*
 
-### Protected Endpoints (Require JWT)
+### 🔒 Protected Endpoints (Require Authentication)
 
 #### User Profile
-```
+```http
 GET /api/profile
 Authorization: Bearer <access_token>
+# OR automatic cookie authentication
 ```
 
 **Response:**
 ```json
 {
   "user_id": "550e8400-e29b-41d4-a716-446655440001",
-  "username": "testuser",
+  "username": "testuser", 
   "message": "This is a protected endpoint"
 }
 ```
 
-### OAuth2 Endpoints
+---
+
+#### Get Active Sessions
+```http
+GET /api/sessions
+Authorization: Bearer <access_token>
+# OR automatic cookie authentication
+```
+
+**Purpose**: View all active sessions for the current user
+
+**Response:**
+```json
+{
+  "message": "Active sessions retrieved successfully",  
+  "data": {
+    "sessions": [
+      {
+        "session_id": "sess_123...",
+        "created_at": "2024-01-15T10:30:00Z",
+        "last_activity": "2024-01-15T12:45:00Z", 
+        "ip_address": "192.168.1.100",
+        "user_agent": "Mozilla/5.0...",
+        "device_info": "Chrome on Windows",
+        "is_current": true
+      },
+      {
+        "session_id": "sess_456...",
+        "created_at": "2024-01-14T15:20:00Z", 
+        "last_activity": "2024-01-15T09:15:00Z",
+        "ip_address": "10.0.0.50", 
+        "user_agent": "MyApp/1.0...",
+        "device_info": "Mobile App on iOS",
+        "is_current": false
+      }
+    ],
+    "total_sessions": 2,
+    "max_sessions": 3
+  }
+}
+```
+
+---
+
+#### Revoke All Sessions  
+```http
+POST /api/revoke-all
+Authorization: Bearer <access_token>
+# OR automatic cookie authentication
+```
+
+**Purpose**: Immediately revoke all sessions for the current user (security feature)
+
+**Request (Optional):**
+```json
+{
+  "keep_current": false
+}
+```
+
+**Response:**
+```json
+{
+  "message": "All sessions revoked successfully",
+  "data": {
+    "revoked_sessions": 3,
+    "current_session_kept": false
+  }
+}
+```
+
+*Use Cases:*
+- 🚨 **Security Breach**: User suspects account compromise
+- 📱 **Device Loss**: User lost device with active session  
+- 🔄 **Fresh Start**: Clean slate for all devices
+- 👤 **Account Takeover**: Admin security response
+
+---
+
+### 🔐 OAuth2 Endpoints
 
 #### Authorization
 ```
@@ -206,7 +339,41 @@ POST /oauth/token
 }
 ```
 
-## Testing with cURL
+---
+
+## 🛡️ Security Features
+
+### Session Management
+- **Concurrent Limit**: Maximum 3 active sessions per user
+- **Auto-Eviction**: Oldest sessions removed when limit exceeded
+- **Activity Tracking**: Sessions extend automatically when active (15min intervals)
+- **IP Validation**: Sessions tied to originating IP address
+- **Device Fingerprinting**: Unique device identification for security
+
+### Real-time Security Monitoring
+- **IP Change Detection**: Auto-revoke if session used from different IP
+- **Device Change Detection**: Auto-revoke if device fingerprint changes  
+- **Compromise Detection**: Automatic session invalidation on security violations
+- **Audit Logging**: All security events logged with timestamps and context  
+
+### Session Lifecycle
+```
+Login → Session Created → Activity Monitored → Auto-Extend (if active) → Natural Expiry/Revoke
+   ↓                           ↓                       ↓
+Security Check            Security Check          Security Check
+   ↓                           ↓                       ↓  
+Auto-Revoke (if needed)   Auto-Revoke (if needed)  Auto-Revoke (if needed)
+```
+
+### Auto-Extension Logic
+Sessions automatically extend when:
+- ✅ User makes authenticated request  
+- ✅ IP address matches session origin
+- ✅ Device fingerprint matches
+- ✅ Last extension was >15 minutes ago  
+- ✅ Session is not flagged as compromised
+
+## 🧪 Testing with cURL
 
 ### Register User
 ```bash
@@ -221,20 +388,53 @@ curl -X POST http://localhost:8080/api/auth/register \
   }'
 ```
 
-### Login
+### Login (JWT)  
 ```bash
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
+  -H "User-Agent: MyApp/1.0" \
   -d '{
     "user_name": "testuser",
     "password": "password123"
   }'
 ```
 
-### Access Protected Endpoint
+### Login (Cookie)
+```bash  
+curl -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: Mozilla/5.0" \
+  -c cookies.txt \
+  -d '{
+    "user_name": "testuser", 
+    "password": "password123"
+  }'
+```
+
+### Access Protected Endpoint (JWT)
 ```bash
 curl -X GET http://localhost:8080/api/profile \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+```
+
+### Access Protected Endpoint (Cookie)
+```bash
+curl -X GET http://localhost:8080/api/profile \
+  -b cookies.txt
+```
+
+### View Active Sessions
+```bash
+curl -X GET http://localhost:8080/api/sessions \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE"
+```
+
+### Revoke All Sessions
+```bash  
+curl -X POST http://localhost:8080/api/revoke-all \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN_HERE" \
+  -H "Content-Type: application/json" \
+  -d '{"keep_current": false}'
 ```
 
 ### OAuth2 Authorization
@@ -243,7 +443,7 @@ curl -X GET "http://localhost:8080/oauth/authorize?client_id=web-client&redirect
   -H "X-User-ID: 550e8400-e29b-41d4-a716-446655440001"
 ```
 
-## Error Responses
+## ⚠️ Error Responses
 
 All errors follow this format:
 ```json
@@ -253,12 +453,36 @@ All errors follow this format:
 }
 ```
 
-Common HTTP status codes:
-- `400` - Bad Request (invalid input)
-- `401` - Unauthorized (authentication failed)
-- `403` - Forbidden (insufficient permissions)
-- `404` - Not Found
-- `500` - Internal Server Error
+### Common HTTP Status Codes:
+- `400` - Bad Request (invalid input, validation failed)
+- `401` - Unauthorized (authentication failed, invalid token)  
+- `403` - Forbidden (insufficient permissions, session limit exceeded)
+- `404` - Not Found (endpoint or resource not found)
+- `409` - Conflict (user already exists, session conflicts)
+- `429` - Too Many Requests (rate limiting, security throttling)
+- `500` - Internal Server Error (server-side issues)
+
+### Security-Specific Errors:
+```json
+{
+  "error": "Session limit exceeded", 
+  "details": "Maximum 3 concurrent sessions allowed. Oldest session will be revoked."
+}
+```
+
+```json
+{
+  "error": "Session compromised",
+  "details": "IP address or device mismatch detected. Session revoked for security."
+}
+```
+
+```json
+{
+  "error": "Authentication method not supported",
+  "details": "This endpoint requires JWT authentication, cookie auth not supported."
+}
+```
 
 ## Sample Test Data
 

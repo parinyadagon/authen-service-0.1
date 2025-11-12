@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"log"
 	"server/internal/core/domain"
 	"server/internal/core/ports"
 
@@ -154,12 +155,17 @@ func (h *AuthHandler) Refresh(c *fiber.Ctx) error {
 // GET /oauth/authorize
 func (h *AuthHandler) Authorize(c *fiber.Ctx) error {
 	var req domain.AuthorizeReq
-	if err := c.QueryParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error":   "Invalid request parameters",
-			"details": err.Error(),
-		})
-	}
+
+	// Manual query parsing for debugging
+	req.ResponseType = c.Query("response_type")
+	req.ClientID = c.Query("client_id")
+	req.RedirectURI = c.Query("redirect_uri")
+	req.Scope = c.Query("scope")
+	req.State = c.Query("state")
+	req.CodeChallenge = c.Query("code_challenge")
+	req.CodeChallengeMethod = c.Query("code_challenge_method")
+
+	log.Printf("DEBUG: Handler received - ResponseType: '%s', ClientID: '%s'", req.ResponseType, req.ClientID)
 
 	// In a real implementation, you would:
 	// 1. Check if user is authenticated (session/cookie)

@@ -320,8 +320,10 @@ func (s *authService) Register(ctx context.Context, registerReq *domain.Register
 // OAuth2 Authorization Code Flow Implementation
 func (s *authService) Authorize(ctx context.Context, req *domain.AuthorizeReq, userID string) (*domain.AuthorizeResp, error) {
 	// 1. Validate request parameters
+	log.Printf("DEBUG: OAuth2 Authorize request - ResponseType: '%s', ClientID: '%s', RedirectURI: '%s'", req.ResponseType, req.ClientID, req.RedirectURI)
+
 	if req.ResponseType != "code" {
-		return nil, errors.New("unsupported response type")
+		return nil, fmt.Errorf("unsupported response type: '%s' (expected 'code')", req.ResponseType)
 	}
 
 	if req.ClientID == "" {

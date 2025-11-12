@@ -52,6 +52,18 @@ export class AuthService {
         }
       }
 
+      // Store user data from login response
+      if (data.user) {
+        const userData = {
+          ...data.user,
+          auth_type: data.auth_type,
+          login_time: new Date().toISOString(),
+        };
+        const storage = credentials.remember ? localStorage : sessionStorage;
+        storage.setItem("user_data", JSON.stringify(userData));
+        debugLog("User data stored:", userData);
+      }
+
       return data;
     } catch (error) {
       if (error instanceof Error) {
@@ -109,13 +121,30 @@ export class AuthService {
    * Get current user profile
    */
   static async getProfile(): Promise<UserProfile> {
+    // First try to get stored user data from login
+    const storedUser = localStorage.getItem("user_data") || sessionStorage.getItem("user_data");
+
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        debugLog("Using cached user data:", userData);
+        return userData;
+      } catch (parseError) {
+        debugLog("Failed to parse stored user data:", parseError);
+      }
+    }
+
+    // Fallback to API call
+    debugLog("Fetching profile from API...");
     const response = await ApiClient.get("/api/profile");
 
     if (!response.ok) {
       throw new Error("Failed to fetch profile");
     }
 
-    return response.json();
+    const profileData = await response.json();
+    debugLog("Profile from API:", profileData);
+    return profileData;
   }
 
   /**
@@ -240,13 +269,16 @@ export class AuthService {
   }
 
   /**
-   * Clear all stored tokens
+   * Clear all stored tokens and user data
    */
   static clearTokens(): void {
     localStorage.removeItem("access_token");
     localStorage.removeItem("token_type");
+    localStorage.removeItem("user_data");
     sessionStorage.removeItem("access_token");
     sessionStorage.removeItem("token_type");
+    sessionStorage.removeItem("user_data");
+    debugLog("All stored data cleared");
   }
 
   /**

@@ -1,12 +1,18 @@
 // Profile Types
 export interface UserProfile {
-  id: string;
-  username: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  is_active: boolean;
-  is_verified: boolean;
+  // Data from /api/profile endpoint (actual API response)
+  user_id?: string;
+  username?: string;
+  auth_type?: string;
+  message?: string;
+
+  // Extended user data (if available from other endpoints)
+  id?: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  is_active?: boolean;
+  is_verified?: boolean;
   roles?: string[];
   created_at?: string;
   last_login?: string;

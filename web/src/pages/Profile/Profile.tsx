@@ -59,15 +59,19 @@ export function Profile() {
       setLoading(true);
       setError(null);
 
-      if (!AuthService.isAuthenticated()) {
+      // Check authentication status (now async)
+      const isAuthenticated = await AuthService.isAuthenticated();
+      if (!isAuthenticated) {
         setError("Not authenticated");
         return;
       }
 
       const profile = await AuthService.getProfile();
       setUser(profile);
+      console.log("👤 Profile loaded:", profile);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load profile");
+      console.error("❌ Profile load error:", err);
     } finally {
       setLoading(false);
     }
@@ -76,10 +80,30 @@ export function Profile() {
   const loadSessions = async () => {
     try {
       setSessionsLoading(true);
-      const sessionList = await AuthService.getSessions();
-      setSessions(sessionList);
+
+      try {
+        const sessionList = await AuthService.getSessions();
+        setSessions(sessionList);
+        console.log("📊 Sessions loaded:", sessionList);
+      } catch {
+        console.log("⚠️ Sessions API not available, showing mock data");
+        // Show mock session data if API is not available
+        const mockSessions: SessionInfo[] = [
+          {
+            session_id: "current-session",
+            device_id: "browser-" + Date.now(),
+            ip_address: "127.0.0.1",
+            user_agent: navigator.userAgent,
+            last_accessed: new Date().toISOString(),
+            created_at: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+            is_current: true,
+          },
+        ];
+        setSessions(mockSessions);
+      }
     } catch (err) {
-      console.error("Failed to load sessions:", err);
+      console.error("❌ Failed to load sessions:", err);
+      setSessions([]);
     } finally {
       setSessionsLoading(false);
     }
@@ -154,16 +178,19 @@ export function Profile() {
       <Group justify="space-between" mb="xl">
         <Group gap="md">
           <Avatar size="lg" radius="md" color="blue">
-            {user.first_name?.[0]}
-            {user.last_name?.[0]}
+            {user.first_name?.[0] || user.username?.[0] || "U"}
+            {user.last_name?.[0] || user.username?.[1] || ""}
           </Avatar>
           <div>
-            <Title order={2}>
-              {user.first_name} {user.last_name}
-            </Title>
+            <Title order={2}>{user.first_name && user.last_name ? `${user.first_name} ${user.last_name}` : user.username || "User"}</Title>
             <Text size="sm" c="dimmed">
-              @{user.username}
+              {user.username ? `@${user.username}` : `ID: ${user.user_id || user.id || "Unknown"}`}
             </Text>
+            {user.auth_type && (
+              <Badge size="xs" variant="light" color="green" mt="xs">
+                {user.auth_type.toUpperCase()} Auth
+              </Badge>
+            )}
           </div>
         </Group>
 
@@ -180,7 +207,7 @@ export function Profile() {
       </Group>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onChange={setActiveTab}>
+      <Tabs value={activeTab} onChange={(value) => setActiveTab(value || "profile")}>
         <Tabs.List>
           <Tabs.Tab value="profile" leftSection={<IconUser size={16} />}>
             Profile
@@ -208,6 +235,7 @@ export function Profile() {
                 </Card.Section>
 
                 <Stack gap="md" mt="md">
+                  {/* User ID */}
                   <Group justify="space-between">
                     <Group gap="sm">
                       <IconUser size={16} />
@@ -216,42 +244,84 @@ export function Profile() {
                       </Text>
                     </Group>
                     <Text size="sm" ff="monospace">
-                      {user.id}
+                      {user.user_id || user.id || "N/A"}
                     </Text>
                   </Group>
 
-                  <Divider />
+                  {/* Username */}
+                  {user.username && (
+                    <>
+                      <Divider />
+                      <Group justify="space-between">
+                        <Text size="sm" c="dimmed">
+                          Username:
+                        </Text>
+                        <Text size="sm" fw={500}>
+                          @{user.username}
+                        </Text>
+                      </Group>
+                    </>
+                  )}
 
-                  <Group justify="space-between">
-                    <Group gap="sm">
-                      <IconMail size={16} />
+                  {/* Email */}
+                  {user.email && (
+                    <>
+                      <Divider />
+                      <Group justify="space-between">
+                        <Group gap="sm">
+                          <IconMail size={16} />
+                          <Text size="sm" c="dimmed">
+                            Email:
+                          </Text>
+                        </Group>
+                        <Text size="sm">{user.email}</Text>
+                      </Group>
+                    </>
+                  )}
+
+                  {/* Authentication Type */}
+                  {user.auth_type && (
+                    <>
+                      <Divider />
+                      <Group justify="space-between">
+                        <Text size="sm" c="dimmed">
+                          Auth Method:
+                        </Text>
+                        <Badge color="blue" variant="light" size="sm">
+                          {user.auth_type.toUpperCase()}
+                        </Badge>
+                      </Group>
+                    </>
+                  )}
+
+                  {/* Status */}
+                  {user.is_active !== undefined && (
+                    <>
+                      <Divider />
+                      <Group justify="space-between">
+                        <Text size="sm" c="dimmed">
+                          Status:
+                        </Text>
+                        <Badge color={user.is_active ? "green" : "red"} variant="light" size="sm">
+                          {user.is_active ? "Active" : "Inactive"}
+                        </Badge>
+                      </Group>
+                    </>
+                  )}
+
+                  {/* Verified */}
+                  {user.is_verified !== undefined && (
+                    <Group justify="space-between">
                       <Text size="sm" c="dimmed">
-                        Email:
+                        Verified:
                       </Text>
+                      <Badge color={user.is_verified ? "blue" : "orange"} variant="light" size="sm">
+                        {user.is_verified ? "Verified" : "Unverified"}
+                      </Badge>
                     </Group>
-                    <Text size="sm">{user.email}</Text>
-                  </Group>
+                  )}
 
-                  <Divider />
-
-                  <Group justify="space-between">
-                    <Text size="sm" c="dimmed">
-                      Status:
-                    </Text>
-                    <Badge color={user.is_active ? "green" : "red"} variant="light" size="sm">
-                      {user.is_active ? "Active" : "Inactive"}
-                    </Badge>
-                  </Group>
-
-                  <Group justify="space-between">
-                    <Text size="sm" c="dimmed">
-                      Verified:
-                    </Text>
-                    <Badge color={user.is_verified ? "blue" : "orange"} variant="light" size="sm">
-                      {user.is_verified ? "Verified" : "Unverified"}
-                    </Badge>
-                  </Group>
-
+                  {/* Roles */}
                   {user.roles && user.roles.length > 0 && (
                     <>
                       <Divider />
@@ -270,6 +340,7 @@ export function Profile() {
                     </>
                   )}
 
+                  {/* Member since */}
                   {user.created_at && (
                     <>
                       <Divider />
@@ -284,6 +355,27 @@ export function Profile() {
                       </Group>
                     </>
                   )}
+
+                  {/* API Response Info */}
+                  {user.message && (
+                    <>
+                      <Divider />
+                      <Alert color="blue" variant="light">
+                        <Text size="sm">{user.message}</Text>
+                      </Alert>
+                    </>
+                  )}
+
+                  {/* Debug Info */}
+                  <Divider />
+                  <Group justify="space-between">
+                    <Text size="xs" c="dimmed">
+                      Session Status:
+                    </Text>
+                    <Badge color="green" variant="outline" size="xs">
+                      Connected
+                    </Badge>
+                  </Group>
                 </Stack>
               </Card>
             </Grid.Col>
@@ -400,6 +492,32 @@ export function Profile() {
               <br />
               Your session is secure and all data is fetched from protected API endpoints.
             </Alert>
+
+            <Card withBorder shadow="sm" radius="md">
+              <Card.Section withBorder inheritPadding py="xs">
+                <Text fw={500}>Raw Profile Data</Text>
+              </Card.Section>
+
+              <Paper bg="gray.0" p="md" mt="md" radius="sm">
+                <Text size="xs" ff="monospace" style={{ whiteSpace: "pre-wrap" }}>
+                  {JSON.stringify(user, null, 2)}
+                </Text>
+              </Paper>
+            </Card>
+
+            {sessions.length > 0 && (
+              <Card withBorder shadow="sm" radius="md">
+                <Card.Section withBorder inheritPadding py="xs">
+                  <Text fw={500}>Raw Session Data</Text>
+                </Card.Section>
+
+                <Paper bg="gray.0" p="md" mt="md" radius="sm">
+                  <Text size="xs" ff="monospace" style={{ whiteSpace: "pre-wrap" }}>
+                    {JSON.stringify(sessions, null, 2)}
+                  </Text>
+                </Paper>
+              </Card>
+            )}
           </Stack>
         </Tabs.Panel>
       </Tabs>

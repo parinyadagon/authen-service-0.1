@@ -1,4 +1,3 @@
-````markdown
 # 🔐 Authentication Service API
 
 **Version:** 0.1.0  
@@ -484,10 +483,11 @@ All errors follow this format:
 }
 ```
 
-## Sample Test Data
+## 📊 Sample Test Data
 
 Use these credentials for testing:
 
+### Users
 **Admin User:**
 - Username: `admin`
 - Password: `password123`
@@ -498,7 +498,132 @@ Use these credentials for testing:
 - Password: `password123`
 - Email: `testuser@example.com`
 
-**OAuth2 Clients:**
+### OAuth2 Clients
+**Web Client:**
 - Client ID: `web-client`
 - Client Secret: `your-client-secret-here`
 - Redirect URI: `http://localhost:3000/callback`
+
+## 🎯 Integration Examples
+
+### Web Application (Cookie Auth)
+```javascript
+// Login
+const response = await fetch('/api/auth/login', {
+  method: 'POST',
+  credentials: 'include', // Include cookies
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    user_name: 'testuser',
+    password: 'password123'
+  })
+});
+
+// Subsequent requests automatically include cookies
+const profile = await fetch('/api/profile', {
+  credentials: 'include'  
+});
+```
+
+### Mobile App (JWT Auth)  
+```javascript
+// Login
+const loginResponse = await fetch('/api/auth/login', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'User-Agent': 'MyMobileApp/1.0'
+  },
+  body: JSON.stringify({
+    user_name: 'testuser',
+    password: 'password123'
+  })
+});
+
+const tokens = await loginResponse.json();
+localStorage.setItem('access_token', tokens.data.access_token);
+localStorage.setItem('refresh_token', tokens.data.refresh_token);
+
+// Use token for requests
+const profile = await fetch('/api/profile', {
+  headers: {
+    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+  }
+});
+```
+
+### Session Management UI
+```javascript
+// Get active sessions
+const sessions = await fetch('/api/sessions', {
+  credentials: 'include'
+}).then(r => r.json());
+
+console.log(`Active sessions: ${sessions.data.total_sessions}/${sessions.data.max_sessions}`);
+
+// Emergency: Revoke all sessions
+const revokeAll = await fetch('/api/revoke-all', {
+  method: 'POST',
+  credentials: 'include',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ keep_current: false })
+});
+```
+
+## 🔧 Advanced Configuration
+
+### Session Configuration (config/session.go)
+```go
+SessionConfig{
+    MaxConcurrentSessions: 3,           // Max sessions per user
+    SessionTimeout: 24 * time.Hour,     // Session lifetime  
+    ExtensionInterval: 15 * time.Minute, // Auto-extend frequency
+    SecurityCheckInterval: 5 * time.Minute, // Security scan frequency
+    CleanupInterval: time.Hour,         // Cleanup old sessions
+}
+```
+
+### Security Policies
+- **IP Validation**: Strict IP checking (can be configured to allow IP ranges)
+- **Device Fingerprinting**: User-Agent + custom headers for device identification  
+- **Session Limits**: Configurable per-user concurrent session limits
+- **Auto-Revoke**: Immediate session termination on security violations
+- **Audit Trail**: Complete session lifecycle logging for security analysis
+
+## 🚀 Performance & Scalability
+
+### Go Fiber Advantages
+- **High Performance**: Up to 10x faster than traditional frameworks
+- **Low Memory**: Efficient memory usage with minimal overhead
+- **Fast Routing**: Express.js-inspired routing with zero allocation
+- **Built-in Middleware**: Compression, CORS, Rate Limiting, Logging
+
+### Database Optimizations
+- **Connection Pooling**: Optimized MySQL connection management
+- **Indexed Queries**: All session lookups use proper database indexes
+- **Batch Operations**: Efficient session cleanup with batch processing
+- **Query Optimization**: Prepared statements for security and performance
+
+## 🔍 Monitoring & Observability
+
+### Health Checks
+```bash
+curl http://localhost:8080/health
+```
+
+### Metrics (Future Enhancement)
+- Session creation/revocation rates
+- Authentication success/failure rates  
+- Security incident detection counts
+- Response time distributions
+- Active session counts per user
+
+### Logging
+- **Structured Logs**: JSON format for easy parsing
+- **Security Events**: All authentication and session events logged
+- **Performance Metrics**: Request duration and database query times
+- **Error Tracking**: Detailed error context and stack traces
+
+---
+
+*Last Updated: November 2025 | Framework: Go Fiber v2.52.9 | Security: Enterprise Grade*

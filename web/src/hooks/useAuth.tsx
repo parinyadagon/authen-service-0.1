@@ -13,31 +13,42 @@ export function useAuth() {
   const checkAuthStatus = useCallback(async () => {
     try {
       setAuthState((prev) => ({ ...prev, loading: true, error: null }));
-      console.log("🔄 Starting authentication check...");
+      console.log("🔄 Starting optimized authentication check...");
 
-      // Check authentication status with backend (includes both JWT and cookies)
-      const isAuthenticated = await AuthService.isAuthenticated();
+      // Single API call that returns both auth status and user data
+      const { isAuthenticated, user } = await AuthService.checkAuthWithUser();
 
       if (isAuthenticated) {
-        console.log("✅ User is authenticated, fetching profile...");
-        try {
-          const user = await AuthService.getProfile();
+        console.log("✅ User is authenticated");
+
+        if (user) {
+          console.log("👤 Got user data from auth check:", user.username);
           setAuthState({
             isAuthenticated: true,
             user,
             loading: false,
             error: null,
           });
-          console.log("👤 Profile loaded successfully:", user.username);
-        } catch (profileErr) {
-          console.log("⚠️ Authentication valid but profile fetch failed:", profileErr);
-          // User is authenticated but we can't get their profile
-          setAuthState({
-            isAuthenticated: true,
-            user: null,
-            loading: false,
-            error: "Could not load user profile",
-          });
+        } else {
+          console.log("📥 No user data in auth response, fetching profile...");
+          try {
+            const profile = await AuthService.getProfile();
+            setAuthState({
+              isAuthenticated: true,
+              user: profile,
+              loading: false,
+              error: null,
+            });
+            console.log("👤 Profile loaded successfully:", profile.username);
+          } catch (profileErr) {
+            console.log("⚠️ Authentication valid but profile fetch failed:", profileErr);
+            setAuthState({
+              isAuthenticated: true,
+              user: null,
+              loading: false,
+              error: "Could not load user profile",
+            });
+          }
         }
       } else {
         console.log("❌ User is not authenticated");
@@ -72,12 +83,16 @@ export function useAuth() {
 
       const response = await AuthService.login(credentials);
 
+      // Set auth state immediately with login response data
+      // No need to call checkAuthStatus again after successful login
       setAuthState({
         isAuthenticated: true,
         user: response.user || null,
         loading: false,
         error: null,
       });
+
+      console.log("🚀 Login successful - auth state updated directly from response");
     } catch (error) {
       setAuthState((prev) => ({
         ...prev,

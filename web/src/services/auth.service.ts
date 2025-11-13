@@ -6,6 +6,16 @@ const API_BASE_URL = "http://localhost:8080";
 // Debug mode - set to false in production
 const DEBUG_AUTH = true;
 
+// Simple cache to prevent duplicate auth checks
+let authCache: { result: { isAuthenticated: boolean; user?: UserProfile }; timestamp: number } | null = null;
+const CACHE_DURATION = 5000; // 5 seconds
+
+// Helper to clear auth cache
+const clearAuthCache = () => {
+  authCache = null;
+  debugLog("🗑️ Auth cache cleared");
+};
+
 // Debug helper
 const debugLog = (message: string, ...args: unknown[]) => {
   if (DEBUG_AUTH) {
@@ -64,6 +74,9 @@ export class AuthService {
         debugLog("User data stored:", userData);
       }
 
+      // Clear auth cache after successful login
+      clearAuthCache();
+
       return data;
     } catch (error) {
       if (error instanceof Error) {
@@ -112,8 +125,9 @@ export class AuthService {
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
-      // Clear stored tokens
+      // Clear stored tokens and auth cache
       this.clearTokens();
+      clearAuthCache();
     }
   }
 
@@ -219,8 +233,9 @@ export class AuthService {
       throw new Error("Failed to revoke sessions");
     }
 
-    // Clear local tokens after successful revoke
+    // Clear local tokens and auth cache after successful revoke
     this.clearTokens();
+    clearAuthCache();
   }
 
   /**
@@ -234,6 +249,15 @@ export class AuthService {
 
     // Always verify with backend regardless of local tokens
     // This ensures we catch expired sessions and HttpOnly cookies
+    const result = await this.verifyAuthStatus();
+    return result.isAuthenticated;
+  }
+
+  /**
+   * Check authentication and get user data in one call
+   * More efficient than separate isAuthenticated() + getProfile() calls
+   */
+  static async checkAuthWithUser(): Promise<{ isAuthenticated: boolean; user?: UserProfile }> {
     return await this.verifyAuthStatus();
   }
 
@@ -293,9 +317,17 @@ export class AuthService {
   /**
    * Verify authentication status by calling a protected endpoint
    * This checks both JWT tokens and HttpOnly session cookies with the backend
+   * Returns both auth status and user data if available
    */
-  static async verifyAuthStatus(): Promise<boolean> {
+  static async verifyAuthStatus(): Promise<{ isAuthenticated: boolean; user?: UserProfile }> {
     try {
+      // Check cache first to prevent duplicate calls
+      const now = Date.now();
+      if (authCache && now - authCache.timestamp < CACHE_DURATION) {
+        console.log("📦 Using cached auth result");
+        return authCache.result;
+      }
+
       console.log("🔍 Verifying authentication with lightweight endpoint...");
 
       const response = await fetch(`${API_BASE_URL}/api/auth/check`, {
@@ -309,22 +341,43 @@ export class AuthService {
       const isAuthenticated = response.ok;
       console.log(`🔐 Auth verification result: ${isAuthenticated ? "✅ Authenticated" : "❌ Not authenticated"} (${response.status})`);
 
+      let result: { isAuthenticated: boolean; user?: UserProfile };
+
       if (isAuthenticated) {
         try {
-          const data = await response.clone().json();
-          console.log("👤 User info:", data.user_id || "Unknown user");
-          console.log("✅ Auth check:", data.message || "Valid");
+          const data = await response.json();
+          console.log("👤 User info from auth check:", data.user_id || "Unknown user");
+
+          // If the response includes user data, return it to avoid another API call
+          if (data.user || (data.user_id && data.username)) {
+            const userData = data.user || {
+              id: data.user_id,
+              username: data.username,
+              first_name: data.first_name,
+              last_name: data.last_name,
+              email: data.email,
+            };
+            result = { isAuthenticated: true, user: userData };
+          } else {
+            result = { isAuthenticated: true };
+          }
         } catch (parseError) {
           console.log("📄 Got response but couldn't parse JSON:", parseError);
+          result = { isAuthenticated: true };
         }
       } else {
         console.log("❗ Authentication failed - may need to login");
+        result = { isAuthenticated: false };
       }
 
-      return isAuthenticated;
+      // Cache the result
+      authCache = { result, timestamp: now };
+      return result;
     } catch (error) {
       console.error("🚨 Auth verification network error:", error);
-      return false;
+      const result = { isAuthenticated: false };
+      authCache = { result, timestamp: Date.now() };
+      return result;
     }
   }
 

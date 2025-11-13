@@ -86,20 +86,8 @@ export function Profile() {
         setSessions(sessionList);
         console.log("📊 Sessions loaded:", sessionList);
       } catch {
-        console.log("⚠️ Sessions API not available, showing mock data");
-        // Show mock session data if API is not available
-        const mockSessions: SessionInfo[] = [
-          {
-            session_id: "current-session",
-            device_id: "browser-" + Date.now(),
-            ip_address: "127.0.0.1",
-            user_agent: navigator.userAgent,
-            last_accessed: new Date().toISOString(),
-            created_at: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-            is_current: true,
-          },
-        ];
-        setSessions(mockSessions);
+        // If sessions API fails, just set empty array
+        setSessions([]);
       }
     } catch (err) {
       console.error("❌ Failed to load sessions:", err);

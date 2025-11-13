@@ -2,12 +2,27 @@ import { Route, Routes } from "react-router";
 
 import { Login } from "@/pages/Auth";
 import { Profile } from "@/pages/Profile/Profile";
+import { ProtectedRoute, PublicRoute } from "@/components";
 
 function App() {
   return (
     <Routes>
-      <Route path="" element={<Login />} />
-      <Route path="/profile" element={<Profile />} />
+      <Route
+        path=""
+        element={
+          <PublicRoute>
+            <Login />
+          </PublicRoute>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }

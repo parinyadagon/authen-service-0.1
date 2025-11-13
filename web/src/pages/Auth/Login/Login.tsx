@@ -4,11 +4,14 @@ import { useForm } from "@mantine/form";
 import classes from "./Login.module.css";
 import { AuthService } from "../../../services/auth.service";
 import type { LoginRequest } from "../../../types/auth.types";
+import { useNavigate } from "react-router";
 
 export function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  const navigate = useNavigate();
 
   const form = useForm<LoginRequest>({
     initialValues: {
@@ -45,7 +48,7 @@ export function Login() {
   if (success) {
     // Auto redirect after 1 second
     setTimeout(() => {
-      window.location.href = "/profile";
+      navigate("/profile");
     }, 1000);
 
     return (

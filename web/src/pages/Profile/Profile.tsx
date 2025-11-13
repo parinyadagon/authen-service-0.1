@@ -34,6 +34,7 @@ import {
 } from "@tabler/icons-react";
 import { AuthService } from "../../services/auth.service";
 import type { UserProfile, SessionInfo } from "../../types/auth.types";
+import { useNavigate } from "react-router";
 
 export function Profile() {
   const [loading, setLoading] = useState(true);
@@ -43,6 +44,8 @@ export function Profile() {
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("profile");
   const [sessionsLoading, setSessionsLoading] = useState(false);
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     loadProfile();
@@ -101,7 +104,7 @@ export function Profile() {
     try {
       setLogoutLoading(true);
       await AuthService.logout();
-      window.location.href = "/";
+      navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Logout failed");
     } finally {
@@ -113,7 +116,7 @@ export function Profile() {
     try {
       setLogoutLoading(true);
       await AuthService.revokeAllSessions();
-      window.location.href = "/";
+      navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to revoke sessions");
     } finally {

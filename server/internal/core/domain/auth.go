@@ -105,6 +105,25 @@ type TokenResp struct {
 	Scope        string `json:"scope,omitempty"`
 }
 
+// Session response types for frontend
+type SessionInfo struct {
+	SessionID    string    `json:"session_id"`
+	DeviceID     string    `json:"device_id"`
+	IPAddress    string    `json:"ip_address"`
+	UserAgent    string    `json:"user_agent"`
+	LastAccessed time.Time `json:"last_accessed"`
+	CreatedAt    time.Time `json:"created_at"`
+	IsCurrent    bool      `json:"is_current"`
+	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+type GetSessionsResp struct {
+	Sessions     []SessionInfo `json:"sessions"`
+	TotalCount   int           `json:"total_count"`
+	MaxSessions  int           `json:"max_sessions"`
+	CurrentToken string        `json:"current_token,omitempty"` // For identifying current session
+}
+
 // Authorization Code entity
 type AuthorizationCode struct {
 	Code                string    `json:"code"`

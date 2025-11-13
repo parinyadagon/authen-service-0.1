@@ -47,6 +47,14 @@ export interface SessionInfo {
   last_accessed: string;
   created_at: string;
   is_current: boolean;
+  expires_at: string;
+}
+
+export interface GetSessionsResponse {
+  sessions: SessionInfo[];
+  total_count: number;
+  max_sessions: number;
+  current_token?: string;
 }
 
 // Auth State Types

@@ -680,3 +680,79 @@ func (s *authService) RefreshSession(ctx context.Context, refreshToken string) (
 		},
 	}, nil
 }
+
+// GetActiveUserSessions retrieves all active sessions for a user
+func (s *authService) GetActiveUserSessions(ctx context.Context, userID, currentSessionToken string) (*domain.GetSessionsResp, error) {
+	if userID == "" {
+		return nil, errors.New("user ID is required")
+	}
+
+	// Clean up expired sessions first
+	err := s.authRepo.CleanupExpiredSessions(ctx, userID)
+	if err != nil {
+		log.Printf("Warning: failed to cleanup expired sessions: %v", err)
+	}
+
+	// Get all active sessions
+	sessions, err := s.authRepo.FindActiveUserSessions(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve user sessions: %w", err)
+	}
+
+	// Convert to response format
+	sessionInfos := make([]domain.SessionInfo, 0, len(sessions))
+	for _, session := range sessions {
+		isCurrent := session.SessionToken == currentSessionToken
+
+		sessionInfo := domain.SessionInfo{
+			SessionID:    session.SessionToken[:16] + "...", // Truncate for security
+			DeviceID:     session.DeviceID,
+			IPAddress:    session.IPAddress,
+			UserAgent:    session.UserAgent,
+			LastAccessed: session.LastAccessed,
+			CreatedAt:    session.CreatedAt,
+			ExpiresAt:    session.ExpiresAt,
+			IsCurrent:    isCurrent,
+		}
+
+		// Add browser detection based on User-Agent
+		if session.UserAgent != "" {
+			sessionInfo.UserAgent = s.parseBrowserInfo(session.UserAgent)
+		}
+
+		sessionInfos = append(sessionInfos, sessionInfo)
+	}
+
+	return &domain.GetSessionsResp{
+		Sessions:     sessionInfos,
+		TotalCount:   len(sessionInfos),
+		MaxSessions:  3,                                // From configuration
+		CurrentToken: currentSessionToken[:16] + "...", // Truncated
+	}, nil
+}
+
+// parseBrowserInfo extracts browser information from User-Agent
+func (s *authService) parseBrowserInfo(userAgent string) string {
+	userAgent = strings.ToLower(userAgent)
+
+	// Simple browser detection
+	if strings.Contains(userAgent, "chrome") && !strings.Contains(userAgent, "edge") {
+		return "Chrome Browser"
+	} else if strings.Contains(userAgent, "firefox") {
+		return "Firefox Browser"
+	} else if strings.Contains(userAgent, "safari") && !strings.Contains(userAgent, "chrome") {
+		return "Safari Browser"
+	} else if strings.Contains(userAgent, "edge") {
+		return "Microsoft Edge"
+	} else if strings.Contains(userAgent, "opera") {
+		return "Opera Browser"
+	} else if strings.Contains(userAgent, "postman") {
+		return "Postman API Client"
+	} else if strings.Contains(userAgent, "curl") {
+		return "cURL Client"
+	} else if strings.Contains(userAgent, "insomnia") {
+		return "Insomnia API Client"
+	} else {
+		return "Unknown Device"
+	}
+}

@@ -21,6 +21,7 @@ type AuthServicePort interface {
 	RefreshSession(ctx context.Context, refreshToken string) (*domain.AuthResp, error)
 	InvalidateAllUserSessions(ctx context.Context, userID string) error
 	DetectSessionCompromise(ctx context.Context, sessionToken, currentIP, currentUserAgent string) (bool, error)
+	GetActiveUserSessions(ctx context.Context, userID, currentSessionToken string) (*domain.GetSessionsResp, error)
 }
 
 type AuthRepositoryPort interface {

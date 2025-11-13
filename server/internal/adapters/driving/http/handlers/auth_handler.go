@@ -279,11 +279,26 @@ func (h *AuthHandler) GetActiveSessions(c *fiber.Ctx) error {
 		})
 	}
 
-	// This would require a new repository method to get session details
+	// Get current session token for identifying current session
+	currentSessionToken := c.Cookies("session_token")
+	if currentSessionToken == "" {
+		// For JWT auth, we might not have current session token
+		// We'll pass empty string and service will handle it
+		currentSessionToken = ""
+	}
+
+	sessions, err := h.authService.GetActiveUserSessions(c.Context(), userID, currentSessionToken)
+	if err != nil {
+		log.Printf("Failed to get user sessions: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":   "Failed to retrieve sessions",
+			"details": err.Error(),
+		})
+	}
+
 	return c.JSON(fiber.Map{
-		"message": "Active sessions (feature in development)",
-		"user_id": userID,
-		"note":    "Use revoke-all to invalidate all sessions for security",
+		"message": "Active sessions retrieved successfully",
+		"data":    sessions,
 	})
 }
 

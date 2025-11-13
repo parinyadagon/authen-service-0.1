@@ -171,7 +171,7 @@ export class AuthService {
   }
 
   /**
-   * Get active sessions
+   * Get active user sessions
    */
   static async getSessions(): Promise<SessionInfo[]> {
     const response = await ApiClient.get("/api/auth/sessions");
@@ -180,7 +180,16 @@ export class AuthService {
       throw new Error("Failed to fetch sessions");
     }
 
-    return response.json();
+    const data = await response.json();
+    debugLog("Sessions API response:", data);
+
+    // Extract sessions from the response data structure
+    if (data.data && data.data.sessions) {
+      return data.data.sessions;
+    }
+
+    // Fallback if response structure is different
+    return data.sessions || [];
   }
 
   /**

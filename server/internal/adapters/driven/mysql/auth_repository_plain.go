@@ -593,10 +593,11 @@ func (r *authRepository) RevokeAllUserSessions(ctx context.Context, userID strin
 
 func (r *authRepository) FindActiveUserSessions(ctx context.Context, userID string) ([]*domain.UserSession, error) {
 	query := `
-		SELECT session_token, user_id, client_id, expires_at, is_active, created_at
+		SELECT session_token, user_id, client_id, expires_at, is_active, created_at,
+		       ip_address, user_agent, device_id, last_accessed
 		FROM user_sessions 
 		WHERE user_id = ? AND is_active = 1 AND expires_at > NOW()
-		ORDER BY created_at DESC`
+		ORDER BY last_accessed DESC, created_at DESC`
 
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -607,6 +608,9 @@ func (r *authRepository) FindActiveUserSessions(ctx context.Context, userID stri
 	var sessions []*domain.UserSession
 	for rows.Next() {
 		var session domain.UserSession
+		var ipAddress, userAgent, deviceID sql.NullString
+		var lastAccessed sql.NullTime
+
 		err := rows.Scan(
 			&session.SessionToken,
 			&session.UserID,
@@ -614,10 +618,32 @@ func (r *authRepository) FindActiveUserSessions(ctx context.Context, userID stri
 			&session.ExpiresAt,
 			&session.IsActive,
 			&session.CreatedAt,
+			&ipAddress,
+			&userAgent,
+			&deviceID,
+			&lastAccessed,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session: %w", err)
 		}
+
+		// Handle nullable fields
+		if ipAddress.Valid {
+			session.IPAddress = ipAddress.String
+		}
+		if userAgent.Valid {
+			session.UserAgent = userAgent.String
+		}
+		if deviceID.Valid {
+			session.DeviceID = deviceID.String
+		}
+		if lastAccessed.Valid {
+			session.LastAccessed = lastAccessed.Time
+		} else {
+			// Fallback to created_at if last_accessed is null
+			session.LastAccessed = session.CreatedAt
+		}
+
 		sessions = append(sessions, &session)
 	}
 

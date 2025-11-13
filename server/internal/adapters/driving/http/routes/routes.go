@@ -48,6 +48,7 @@ func SetupRoutes(authHandler *handlers.AuthHandler, authRepo ports.AuthRepositor
 	secureAuth.Get("/check", authHandler.CheckAuth) // Lightweight auth check
 	secureAuth.Post("/revoke-all", authHandler.RevokeAllSessions)
 	secureAuth.Get("/sessions", authHandler.GetActiveSessions)
+	secureAuth.Delete("/sessions/:sessionId", authHandler.RevokeSession)
 
 	// Protected routes - JWT or cookie auth required
 	protected := api.Group("/")
@@ -90,6 +91,7 @@ func SetupRoutes(authHandler *handlers.AuthHandler, authRepo ports.AuthRepositor
 				"profile":         "GET /api/profile (requires auth)",
 				"revoke_all":      "POST /api/auth/revoke-all (requires auth)",
 				"sessions":        "GET /api/auth/sessions (requires auth)",
+				"revoke_session":  "DELETE /api/auth/sessions/:sessionId (requires auth)",
 				"oauth_authorize": "GET /oauth/authorize",
 				"oauth_token":     "POST /oauth/token",
 			},

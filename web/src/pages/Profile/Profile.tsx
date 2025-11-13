@@ -121,10 +121,19 @@ export function Profile() {
 
   const handleRevokeSession = async (sessionId: string) => {
     try {
+      setError(null); // Clear any previous errors
       await AuthService.revokeSession(sessionId);
-      await loadSessions(); // Reload sessions
+
+      // Show success message and reload sessions
+      console.log("✅ Session revoked successfully:", sessionId);
+      await loadSessions(); // Reload sessions to reflect changes
+
+      // Clear error state to show success
+      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to revoke session");
+      const errorMessage = err instanceof Error ? err.message : "Failed to revoke session";
+      setError(errorMessage);
+      console.error("❌ Failed to revoke session:", err);
     }
   };
 

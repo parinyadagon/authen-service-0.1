@@ -62,13 +62,8 @@ export function Profile() {
       setLoading(true);
       setError(null);
 
-      // Check authentication status (now async)
-      const isAuthenticated = await AuthService.isAuthenticated();
-      if (!isAuthenticated) {
-        setError("Not authenticated");
-        return;
-      }
-
+      // Skip auth check since ProtectedRoute already handles it
+      // Just load profile data directly
       const profile = await AuthService.getProfile();
       setUser(profile);
       console.log("👤 Profile loaded:", profile);

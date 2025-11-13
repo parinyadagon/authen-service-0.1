@@ -11,7 +11,10 @@ export function PublicRoute({ children, redirectTo = "/profile" }: PublicRoutePr
   const { isAuthenticated, loading } = useAuth();
   const navigate = useNavigate();
 
+  console.log("🔍 PublicRoute state:", { isAuthenticated, loading });
+
   useEffect(() => {
+    console.log("🔄 PublicRoute useEffect:", { isAuthenticated, loading });
     if (!loading && isAuthenticated) {
       console.log("✅ User authenticated, redirecting to:", redirectTo);
       navigate(redirectTo, { replace: true });

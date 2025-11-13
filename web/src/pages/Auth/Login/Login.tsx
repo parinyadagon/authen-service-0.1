@@ -1,16 +1,13 @@
 import { useState } from "react";
 import { Anchor, Button, Checkbox, Container, Group, Paper, PasswordInput, Text, TextInput, Title, Alert } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import classes from "./Login.module.css";
-import { AuthService } from "../../../services/auth.service";
-import type { LoginRequest } from "../../../types/auth.types";
 import { useNavigate } from "react-router";
-
+import classes from "./Login.module.css";
+import { useAuth } from "../../../hooks/useAuth";
+import type { LoginRequest } from "../../../types/auth.types";
 export function Login() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { login, loading, error } = useAuth();
   const [success, setSuccess] = useState(false);
-
   const navigate = useNavigate();
 
   const form = useForm<LoginRequest>({
@@ -26,31 +23,19 @@ export function Login() {
   });
 
   const handleSubmit = async (values: LoginRequest) => {
-    setLoading(true);
-    setError(null);
-
     try {
-      const response = await AuthService.login(values);
+      await login(values);
       setSuccess(true);
-
-      // Redirect or handle successful login
-      console.log("Login successful:", response);
-
-      // You can redirect here or emit an event to parent component
-      // window.location.href = '/dashboard';
+      console.log("Login successful - redirecting to profile");
+      // Manual redirect for immediate navigation
+      navigate("/profile");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
-    } finally {
-      setLoading(false);
+      // Error is handled by useAuth hook
+      console.error("Login failed:", err);
     }
   };
 
   if (success) {
-    // Auto redirect after 1 second
-    setTimeout(() => {
-      navigate("/profile");
-    }, 1000);
-
     return (
       <Container size={420} my={40}>
         <Alert color="green" title="Login Successful">

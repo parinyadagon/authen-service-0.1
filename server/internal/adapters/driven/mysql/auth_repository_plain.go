@@ -517,8 +517,9 @@ func nullString(s string) sql.NullString {
 // User Session operations (for cookie-based auth)
 func (r *authRepository) StoreUserSession(ctx context.Context, session *domain.UserSession) error {
 	query := `
-		INSERT INTO user_sessions (session_token, user_id, client_id, expires_at, is_active, created_at)
-		VALUES (?, ?, ?, ?, ?, ?)`
+		INSERT INTO user_sessions (session_token, user_id, client_id, expires_at, is_active, created_at, 
+		                          ip_address, user_agent, device_id, last_accessed)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := r.db.ExecContext(ctx, query,
 		session.SessionToken,
@@ -526,7 +527,11 @@ func (r *authRepository) StoreUserSession(ctx context.Context, session *domain.U
 		session.ClientID,
 		session.ExpiresAt,
 		session.IsActive,
-		time.Now(),
+		session.CreatedAt,
+		session.IPAddress,
+		session.UserAgent,
+		session.DeviceID,
+		session.LastAccessed,
 	)
 
 	if err != nil {
@@ -538,11 +543,15 @@ func (r *authRepository) StoreUserSession(ctx context.Context, session *domain.U
 
 func (r *authRepository) FindUserSession(ctx context.Context, sessionToken string) (*domain.UserSession, error) {
 	query := `
-		SELECT session_token, user_id, client_id, expires_at, is_active, created_at
+		SELECT session_token, user_id, client_id, expires_at, is_active, created_at,
+		       ip_address, user_agent, device_id, last_accessed
 		FROM user_sessions 
 		WHERE session_token = ? AND is_active = 1`
 
 	var session domain.UserSession
+	var ipAddress, userAgent, deviceID sql.NullString
+	var lastAccessed sql.NullTime
+
 	err := r.db.QueryRowContext(ctx, query, sessionToken).Scan(
 		&session.SessionToken,
 		&session.UserID,
@@ -550,7 +559,27 @@ func (r *authRepository) FindUserSession(ctx context.Context, sessionToken strin
 		&session.ExpiresAt,
 		&session.IsActive,
 		&session.CreatedAt,
+		&ipAddress,
+		&userAgent,
+		&deviceID,
+		&lastAccessed,
 	)
+
+	// Handle nullable fields
+	if ipAddress.Valid {
+		session.IPAddress = ipAddress.String
+	}
+	if userAgent.Valid {
+		session.UserAgent = userAgent.String
+	}
+	if deviceID.Valid {
+		session.DeviceID = deviceID.String
+	}
+	if lastAccessed.Valid {
+		session.LastAccessed = lastAccessed.Time
+	} else {
+		session.LastAccessed = session.CreatedAt
+	}
 
 	if err != nil {
 		if err == sql.ErrNoRows {

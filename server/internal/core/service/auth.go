@@ -146,15 +146,24 @@ func (s *authService) Login(ctx context.Context, authRep *domain.AuthReq) (*doma
 		}
 
 		// Extract security information from context
-		if ipAddr, ok := ctx.Value("ip_address").(string); ok {
+		if ipAddr, ok := ctx.Value("ip_address").(string); ok && ipAddr != "" {
 			userSession.IPAddress = ipAddr
 		}
-		if userAgent, ok := ctx.Value("user_agent").(string); ok {
+		if userAgent, ok := ctx.Value("user_agent").(string); ok && userAgent != "" {
 			userSession.UserAgent = userAgent
 		}
-		if deviceID, ok := ctx.Value("device_id").(string); ok {
+		if deviceID, ok := ctx.Value("device_id").(string); ok && deviceID != "" {
 			userSession.DeviceID = deviceID
 		}
+
+		log.Printf("Creating session for user %s - IP: %s, Device: %s, Agent: %s",
+			found.ID, userSession.IPAddress, userSession.DeviceID,
+			func() string {
+				if len(userSession.UserAgent) > 50 {
+					return userSession.UserAgent[:50] + "..."
+				}
+				return userSession.UserAgent
+			}())
 
 		err = s.authRepo.StoreUserSession(ctx, userSession)
 		if err != nil {

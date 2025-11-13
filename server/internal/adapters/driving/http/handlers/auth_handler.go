@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"log"
 	"server/internal/core/domain"
 	"server/internal/core/ports"
@@ -69,9 +71,21 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	}
 
 	// Create security context for session management
-	securityCtx := context.WithValue(c.Context(), "ip_address", c.IP())
-	securityCtx = context.WithValue(securityCtx, "user_agent", c.Get("User-Agent"))
-	securityCtx = context.WithValue(securityCtx, "device_id", c.Get("X-Device-ID", "unknown"))
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
+	deviceID := c.Get("X-Device-ID")
+
+	// Generate device ID if not provided
+	if deviceID == "" {
+		// Create a simple device fingerprint based on User-Agent and IP
+		deviceID = fmt.Sprintf("auto-%x", sha256.Sum256([]byte(userAgent+ipAddress)))[:16]
+	}
+
+	log.Printf("Login attempt - IP: %s, User-Agent: %s, Device-ID: %s", ipAddress, userAgent, deviceID)
+
+	securityCtx := context.WithValue(c.Context(), "ip_address", ipAddress)
+	securityCtx = context.WithValue(securityCtx, "user_agent", userAgent)
+	securityCtx = context.WithValue(securityCtx, "device_id", deviceID)
 
 	resp, err := h.authService.Login(securityCtx, &req)
 	if err != nil {

@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OAuth2 Test Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+
+        .error {
+            border-left-color: #dc3545;
+            background-color: #f8d7da;
+        }
+
+        .success {
+            border-left-color: #28a745;
+            background-color: #d4edda;
+        }
+
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>OAuth2 Authorization Code Flow Test</h1>
+        <p>This page simulates a client application testing OAuth2 flow with your authentication service.</p>
+
+        <form id="authForm">
+            <div class="form-group">
+                <label for="clientId">Client ID:</label>
+                <select id="clientId" required>
+                    <option value="test-client-1">test-client-1 (Demo App)</option>
+                    <option value="trusted-app">trusted-app (Enterprise App)</option>
+                    <option value="web-client">web-client (Web Application)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="redirectUri">Redirect URI:</label>
+                <input type="url" id="redirectUri" value="http://localhost:3000/callback" required>
+            </div>
+
+            <div class="form-group">
+                <label for="scope">Scope (optional):</label>
+                <input type="text" id="scope" value="read profile email" placeholder="e.g., read write profile">
+            </div>
+
+            <div class="form-group">
+                <label for="state">State (recommended):</label>
+                <input type="text" id="state" value="" placeholder="Random string for security">
+            </div>
+
+            <div class="form-group">
+                <label for="usePKCE">
+                    <input type="checkbox" id="usePKCE" checked> Use PKCE (Proof Key for Code Exchange)
+                </label>
+            </div>
+
+            <button type="submit">Start OAuth2 Flow</button>
+        </form>
+
+        <div id="result" class="result" style="display: none;"></div>
+
+        <h3>Instructions:</h3>
+        <ol>
+            <li>Make sure your authentication service is running on <code>http://localhost:8080</code></li>
+            <li>Make sure your frontend is running on <code>http://localhost:5173</code></li>
+            <li>Fill in the form above and click "Start OAuth2 Flow"</li>
+            <li>You'll be redirected to the authorization page</li>
+            <li>After approval, you'll be redirected back with an authorization code</li>
+        </ol>
+
+        <h3>Expected Flow:</h3>
+        <pre>
+1. Client → Authorization Server: /oauth/authorize
+2. User authenticates and grants permission
+3. Authorization Server → Client: redirect with code
+4. Client → Authorization Server: /oauth/token (exchange code for tokens)
+        </pre>
+    </div>
+
+    <script>
+        // Generate random state for security
+        document.getElementById('state').value = Math.random().toString(36).substring(2, 15);
+
+        // PKCE helper functions
+        function generateCodeVerifier() {
+            const array = new Uint8Array(32);
+            crypto.getRandomValues(array);
+            return base64URLEncode(array);
+        }
+
+        async function generateCodeChallenge(verifier) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(verifier);
+            const digest = await crypto.subtle.digest('SHA-256', data);
+            return base64URLEncode(new Uint8Array(digest));
+        }
+
+        function base64URLEncode(array) {
+            return btoa(String.fromCharCode(...array))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=/g, '');
+        }
+
+        document.getElementById('authForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const clientId = document.getElementById('clientId').value;
+            const redirectUri = document.getElementById('redirectUri').value;
+            const scope = document.getElementById('scope').value;
+            const state = document.getElementById('state').value;
+            const usePKCE = document.getElementById('usePKCE').checked;
+
+            // Build authorization URL - go to FRONTEND authorize page, not backend
+            const authUrl = new URL('http://localhost:8000/oauth/authorize');
+            authUrl.searchParams.append('response_type', 'code');
+            authUrl.searchParams.append('client_id', clientId);
+            authUrl.searchParams.append('redirect_uri', redirectUri);
+
+            if (scope) {
+                authUrl.searchParams.append('scope', scope);
+            }
+
+            if (state) {
+                authUrl.searchParams.append('state', state);
+            }
+
+            if (usePKCE) {
+                try {
+                    const codeVerifier = generateCodeVerifier();
+                    const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+                    // Store code verifier for later use
+                    sessionStorage.setItem('code_verifier', codeVerifier);
+
+                    authUrl.searchParams.append('code_challenge', codeChallenge);
+                    authUrl.searchParams.append('code_challenge_method', 'S256');
+                } catch (error) {
+                    showResult('Failed to generate PKCE parameters: ' + error.message, 'error');
+                    return;
+                }
+            }
+
+            showResult('Redirecting to authorization server...', 'info');
+
+            // Redirect to authorization endpoint
+            window.location.href = authUrl.toString();
+        });
+
+        function showResult(message, type = 'info') {
+            const resultDiv = document.getElementById('result');
+            resultDiv.textContent = message;
+            resultDiv.className = 'result ' + type;
+            resultDiv.style.display = 'block';
+        }
+
+        // Handle callback when redirected back
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('code')) {
+            const code = urlParams.get('code');
+            const state = urlParams.get('state');
+            showResult(`✅ Authorization successful!\nCode: ${code}\nState: ${state}`, 'success');
+        } else if (urlParams.has('error')) {
+            const error = urlParams.get('error');
+            const errorDescription = urlParams.get('error_description');
+            showResult(`❌ Authorization failed!\nError: ${error}\nDescription: ${errorDescription}`, 'error');
+        }
+    </script>
+</body>
+
+</html>

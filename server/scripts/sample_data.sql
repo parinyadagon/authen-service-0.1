@@ -59,13 +59,17 @@ INSERT INTO user_roles (user_id, role_id) VALUES
 -- Insert sample OAuth2 clients
 INSERT INTO clients (id, client_secret_hash, client_name, redirect_uris, allowed_grant_types, owner_user_id) VALUES 
 ('web-client', 'your-client-secret-here', 'Web Application', 'http://localhost:3000/callback,http://localhost:3000/auth/callback', 'authorization_code,refresh_token', '550e8400-e29b-41d4-a716-446655440000'),
+('test-client-1', 'test-client-secret-1', 'Demo OAuth Client', 'http://localhost:3000/callback', 'authorization_code,refresh_token', '550e8400-e29b-41d4-a716-446655440001'),
+('trusted-app', 'trusted-app-secret', 'Trusted Enterprise App', 'http://localhost:3000/callback,https://app.company.com/callback', 'authorization_code,refresh_token,client_credentials', '550e8400-e29b-41d4-a716-446655440000'),
 ('mobile-app', 'your-mobile-secret-here', 'Mobile Application', 'myapp://callback', 'authorization_code,refresh_token', '550e8400-e29b-41d4-a716-446655440000'),
 ('api-client', 'your-api-secret-here', 'API Client', 'http://localhost:3000/api/callback', 'client_credentials', '550e8400-e29b-41d4-a716-446655440000');
 
 -- Sample user consents
 INSERT INTO user_consents (user_id, client_id, scopes_granted) VALUES 
 ('550e8400-e29b-41d4-a716-446655440000', 'web-client', 'read:profile write:profile read:users write:users'),
+('550e8400-e29b-41d4-a716-446655440000', 'trusted-app', 'read:profile write:profile read:users write:users admin:all'),
 ('550e8400-e29b-41d4-a716-446655440001', 'web-client', 'read:profile write:profile'),
+('550e8400-e29b-41d4-a716-446655440001', 'test-client-1', 'read:profile'),
 ('550e8400-e29b-41d4-a716-446655440001', 'mobile-app', 'read:profile');
 
 -- Display inserted data for verification

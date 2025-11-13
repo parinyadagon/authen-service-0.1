@@ -765,3 +765,17 @@ func (s *authService) parseBrowserInfo(userAgent string) string {
 		return "Unknown Device"
 	}
 }
+
+// GetClientInfo retrieves public information about an OAuth2 client
+func (s *authService) GetClientInfo(ctx context.Context, clientID string) (*domain.Client, error) {
+	if clientID == "" {
+		return nil, errors.New("client ID is required")
+	}
+
+	client, err := s.authRepo.FindClientByID(ctx, clientID)
+	if err != nil {
+		return nil, fmt.Errorf("client not found: %w", err)
+	}
+
+	return client, nil
+}

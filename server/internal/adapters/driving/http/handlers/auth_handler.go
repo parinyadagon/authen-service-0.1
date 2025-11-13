@@ -378,6 +378,34 @@ func (h *AuthHandler) RevokeSession(c *fiber.Ctx) error {
 	})
 }
 
+// GetClientInfo returns public information about an OAuth2 client
+// GET /oauth/clients/:clientId
+func (h *AuthHandler) GetClientInfo(c *fiber.Ctx) error {
+	clientId := c.Params("clientId")
+	if clientId == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Client ID is required",
+		})
+	}
+
+	client, err := h.authService.GetClientInfo(c.Context(), clientId)
+	if err != nil {
+		log.Printf("Failed to get client info: %v", err)
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error":   "Client not found",
+			"details": err.Error(),
+		})
+	}
+
+	// Return public client information (no secrets)
+	return c.JSON(fiber.Map{
+		"client_id":    client.ClientID,
+		"client_name":  client.ClientName,
+		"redirect_uri": client.RedirectURI,
+		"created_at":   client.CreatedAt,
+	})
+}
+
 // Health check endpoint
 // GET /health
 func (h *AuthHandler) Health(c *fiber.Ctx) error {

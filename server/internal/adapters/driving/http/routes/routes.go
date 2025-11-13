@@ -77,23 +77,27 @@ func SetupRoutes(authHandler *handlers.AuthHandler, authRepo ports.AuthRepositor
 	// OAuth2 token endpoint - client authentication
 	oauth.Post("/token", authHandler.Token)
 
+	// OAuth2 client info endpoint - public (no auth required for client info)
+	oauth.Get("/clients/:clientId", authHandler.GetClientInfo)
+
 	// API documentation endpoint
 	app.Get("/", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"service": "Authentication Service",
 			"version": "0.1.0",
 			"endpoints": fiber.Map{
-				"health":          "GET /health",
-				"register":        "POST /api/auth/register",
-				"login":           "POST /api/auth/login",
-				"refresh":         "POST /api/auth/refresh",
-				"logout":          "POST /api/auth/logout",
-				"profile":         "GET /api/profile (requires auth)",
-				"revoke_all":      "POST /api/auth/revoke-all (requires auth)",
-				"sessions":        "GET /api/auth/sessions (requires auth)",
-				"revoke_session":  "DELETE /api/auth/sessions/:sessionId (requires auth)",
-				"oauth_authorize": "GET /oauth/authorize",
-				"oauth_token":     "POST /oauth/token",
+				"health":            "GET /health",
+				"register":          "POST /api/auth/register",
+				"login":             "POST /api/auth/login",
+				"refresh":           "POST /api/auth/refresh",
+				"logout":            "POST /api/auth/logout",
+				"profile":           "GET /api/profile (requires auth)",
+				"revoke_all":        "POST /api/auth/revoke-all (requires auth)",
+				"sessions":          "GET /api/auth/sessions (requires auth)",
+				"revoke_session":    "DELETE /api/auth/sessions/:sessionId (requires auth)",
+				"oauth_authorize":   "GET /oauth/authorize",
+				"oauth_token":       "POST /oauth/token",
+				"oauth_client_info": "GET /oauth/clients/:clientId",
 			},
 			"security": fiber.Map{
 				"session_management":   "Multi-device support with session limits",

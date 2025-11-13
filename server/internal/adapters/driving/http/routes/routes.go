@@ -45,6 +45,7 @@ func SetupRoutes(authHandler *handlers.AuthHandler, authRepo ports.AuthRepositor
 	// Protected auth routes - require authentication
 	secureAuth := auth.Group("/")
 	secureAuth.Use(middleware.HybridAuth(authRepo))
+	secureAuth.Get("/check", authHandler.CheckAuth) // Lightweight auth check
 	secureAuth.Post("/revoke-all", authHandler.RevokeAllSessions)
 	secureAuth.Get("/sessions", authHandler.GetActiveSessions)
 

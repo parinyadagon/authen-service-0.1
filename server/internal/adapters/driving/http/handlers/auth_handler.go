@@ -283,6 +283,25 @@ func (h *AuthHandler) RevokeAllSessions(c *fiber.Ctx) error {
 	})
 }
 
+// CheckAuth handles lightweight authentication verification
+// GET /api/auth/check
+func (h *AuthHandler) CheckAuth(c *fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+	if userID == "" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"authenticated": false,
+			"message":       "Not authenticated",
+		})
+	}
+
+	// Simple success response without heavy profile data
+	return c.JSON(fiber.Map{
+		"authenticated": true,
+		"user_id":       userID,
+		"message":       "Authentication valid",
+	})
+}
+
 // GetActiveSessions returns all active sessions for current user
 // GET /api/auth/sessions
 func (h *AuthHandler) GetActiveSessions(c *fiber.Ctx) error {

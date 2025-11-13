@@ -296,9 +296,9 @@ export class AuthService {
    */
   static async verifyAuthStatus(): Promise<boolean> {
     try {
-      console.log("🔍 Verifying authentication with backend server...");
+      console.log("🔍 Verifying authentication with lightweight endpoint...");
 
-      const response = await fetch(`${API_BASE_URL}/api/profile`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/check`, {
         method: "GET",
         credentials: "include", // Critical: includes HttpOnly cookies
         headers: {
@@ -312,8 +312,8 @@ export class AuthService {
       if (isAuthenticated) {
         try {
           const data = await response.clone().json();
-          console.log("👤 User info:", data.user_id || data.username || "Unknown user");
-          console.log("🔑 Auth type:", data.auth_type || "Unknown");
+          console.log("👤 User info:", data.user_id || "Unknown user");
+          console.log("✅ Auth check:", data.message || "Valid");
         } catch (parseError) {
           console.log("📄 Got response but couldn't parse JSON:", parseError);
         }
